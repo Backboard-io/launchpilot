@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID
 
 import httpx
@@ -161,6 +162,35 @@ def _build_verified_github_context(
     }
 
 
+def _parse_owner_repo_from_value(value: str) -> tuple[str, str] | None:
+    raw = (value or "").strip()
+    if not raw:
+        return None
+
+    if raw.startswith("http://") or raw.startswith("https://"):
+        parsed = urlparse(raw)
+        host = (parsed.netloc or "").lower()
+        if host not in {"github.com", "www.github.com"}:
+            return None
+        parts = [part for part in parsed.path.strip("/").split("/") if part]
+        if len(parts) < 2:
+            return None
+        owner, repo = parts[0], parts[1]
+    else:
+        parts = [part for part in raw.strip("/").split("/") if part]
+        if len(parts) != 2:
+            return None
+        owner, repo = parts[0], parts[1]
+
+    if repo.endswith(".git"):
+        repo = repo[:-4]
+    owner = owner.strip()
+    repo = repo.strip()
+    if not owner or not repo:
+        return None
+    return owner, repo
+
+
 @router.post("/run")
 def run_research(
     project_id: UUID,
@@ -202,11 +232,36 @@ def run_research(
             "Use only the verified GitHub repository context in github_repo.files. "
             "If context is missing for a requested file, state that limitation explicitly."
         )
+    elif project.repo_url and "repo:read" in current_user.scopes:
+        connector = Auth0GithubConnector()
+        token = connector.github_access_token(current_user.sub)
+        parsed = _parse_owner_repo_from_value(project.repo_url)
+        if token and parsed:
+            owner, repo_name = parsed
+            github_repo_context = _build_verified_github_context(
+                access_token=token,
+                owner=owner,
+                repo=repo_name,
+                branch=None,
+                path=None,
+                max_files=6,
+                max_file_chars=5000,
+            )
+            github_repo_context["source"] = "project_repo_url"
+            context["github_repo"] = github_repo_context
+            extra_task_instructions = (
+                "Use the verified repository from project.repo_url in github_repo.files as primary context. "
+                "Do not invent repository details that are not present in those files."
+            )
+        elif not token:
+            github_repo_context = {"included": False, "reason": "github_not_linked"}
+        else:
+            github_repo_context = {"included": False, "reason": "invalid_project_repo_url"}
 
     if "repo:read" in current_user.scopes:
         connector = Auth0GithubConnector()
         token = connector.github_access_token(current_user.sub)
-        if token:
+        if token and "github_repo" not in context:
             try:
                 repos = GitHubClient().list_user_repos(token, per_page=20)
                 github_repo_context = {
