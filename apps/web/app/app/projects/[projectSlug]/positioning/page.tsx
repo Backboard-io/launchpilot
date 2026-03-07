@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { IcpCard } from "@/components/positioning/icp-card";
 import { PositioningPreview } from "@/components/positioning/positioning-preview";
 import { PricingDirectionCard } from "@/components/positioning/pricing-direction-card";
-import { env } from "@/lib/env";
+import { apiFetch } from "@/lib/api";
 
 type AgentMode = "baseline" | "deepen" | "retry" | "extend";
 
@@ -44,12 +44,11 @@ export default function PositioningPage() {
   const selected = versions.find((item) => item.selected) ?? versions[0];
 
   const loadVersions = useCallback(async (resolvedProjectId: string) => {
-    const response = await fetch(`${env.apiBaseUrl}/projects/${resolvedProjectId}/positioning`, { cache: "no-store" });
-    if (!response.ok) {
+    const data = await apiFetch<{ versions?: PositioningVersion[] }>(`/projects/${resolvedProjectId}/positioning`);
+    if (!data) {
       throw new Error("Failed to load positioning versions");
     }
-    const payload = await response.json();
-    setVersions(((payload.data?.versions ?? []) as PositioningVersion[]).filter((item) => item.id));
+    setVersions((data.versions ?? []).filter((item) => item.id));
   }, []);
 
   const load = useCallback(async () => {
@@ -59,12 +58,10 @@ export default function PositioningPage() {
     setLoading(true);
     setError(null);
     try {
-      const projectsResponse = await fetch(`${env.apiBaseUrl}/projects`, { cache: "no-store" });
-      if (!projectsResponse.ok) {
+      const projects = await apiFetch<ProjectRow[]>("/projects");
+      if (!projects) {
         throw new Error("Failed to load projects");
       }
-      const projectsPayload = await projectsResponse.json();
-      const projects = (projectsPayload.data ?? []) as ProjectRow[];
       const project = projects.find((item) => item.slug === projectSlug);
       if (!project) {
         throw new Error("Project not found for this slug");
@@ -90,19 +87,19 @@ export default function PositioningPage() {
       setRunning(true);
       setError(null);
       try {
-        const response = await fetch(`${env.apiBaseUrl}/projects/${projectId}/positioning/${endpoint}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            advice: advice.trim() || null,
-            mode
-          })
-        });
-        if (!response.ok) {
+        const data = await apiFetch<{ agent_trace?: Record<string, unknown> }>(
+          `/projects/${projectId}/positioning/${endpoint}`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              advice: advice.trim() || null,
+              mode
+            })
+          }
+        );
+        if (!data) {
           throw new Error(`Positioning ${endpoint} failed`);
         }
-        const payload = await response.json();
-        const data = payload.data ?? {};
         setLastTrace((data.agent_trace ?? null) as Record<string, unknown> | null);
         await loadVersions(projectId);
       } catch (runError) {
@@ -121,10 +118,10 @@ export default function PositioningPage() {
       }
       setError(null);
       try {
-        const response = await fetch(`${env.apiBaseUrl}/projects/${projectId}/positioning/select/${versionId}`, {
+        const result = await apiFetch(`/projects/${projectId}/positioning/select/${versionId}`, {
           method: "POST"
         });
-        if (!response.ok) {
+        if (result === null) {
           throw new Error("Failed to select positioning version");
         }
         await loadVersions(projectId);

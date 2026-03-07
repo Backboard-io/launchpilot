@@ -145,6 +145,21 @@ Backboard stage sessions are persisted per project and stage using project memor
 - `backboard_positioning_assistant` / `backboard_positioning_thread`
 - `backboard_execution_assistant` / `backboard_execution_thread`
 
+When a system prompt changes, the API automatically rotates the stored stage assistant/thread using a prompt fingerprint so new runs use the updated prompt.
+
+## Agent system prompts
+
+All agent system prompts are stored in `apps/api/app/prompts`:
+
+- `apps/api/app/prompts/research_prompt.py` (Research Agent system prompt)
+- `apps/api/app/prompts/positioning_prompt.py` (Positioning Agent system prompt)
+- `apps/api/app/prompts/execution_prompt.py` (Execution Agent system prompt)
+
+These prompt constants are passed into Backboard assistant creation via:
+- `apps/api/app/agents/research_agent.py`
+- `apps/api/app/agents/positioning_agent.py`
+- `apps/api/app/agents/execution_agent.py`
+
 ## API overview
 
 Base URL: `http://localhost:8000/v1`

@@ -2,35 +2,120 @@ import Link from "next/link";
 
 import { MemoryHighlightsCard } from "@/components/project/memory-highlights-card";
 import { SourceDocsCard } from "@/components/project/source-docs-card";
+import { serverApiFetch } from "@/lib/api";
 
-export default async function ProjectOverviewPage({
-  params
-}: {
-  params: Promise<{ projectSlug: string }>;
-}) {
+interface Project {
+  id: string;
+  slug: string;
+  name: string;
+  stage: string;
+  summary: string | null;
+  goal: string | null;
+  status: string;
+}
+
+interface MemoryEntry {
+  id: string;
+  memory_key: string;
+  memory_value: Record<string, unknown>;
+  memory_type: string;
+}
+
+interface ActivityEvent {
+  id: string;
+  verb: string;
+  object_type: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+interface ProjectSource {
+  id: string;
+  source_type: string;
+  title: string | null;
+  url: string | null;
+}
+
+function formatTimeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 60) return `${diffMins} minutes ago`;
+  if (diffHours < 24) return `${diffHours} hours ago`;
+  return `${diffDays} days ago`;
+}
+
+export default async function ProjectOverviewPage({ params }: { params: Promise<{ projectSlug: string }> }) {
   const { projectSlug } = await params;
+
+  // Fetch project data
+  const projects = (await serverApiFetch<Project[]>("/projects")) ?? [];
+  const project = projects.find((p) => p.slug === projectSlug);
+
+  // Fetch related data if project exists
+  const [memory, activity] = project
+    ? await Promise.all([
+        serverApiFetch<MemoryEntry[]>(`/projects/${project.id}/memory`),
+        serverApiFetch<ActivityEvent[]>(`/projects/${project.id}/activity`)
+      ])
+    : [null, null];
+
+  // Sources endpoint doesn't have a GET yet, so we'll show empty for now
+  const sources: ProjectSource[] = [];
+
+  // Determine step completion based on stage
+  const stageOrder = ["idea", "research", "positioning", "execution", "completed"];
+  const currentStageIndex = stageOrder.indexOf(project?.stage ?? "idea");
 
   const steps = [
     {
       number: "1",
       label: "Run Research",
       href: `/app/projects/${projectSlug}/research`,
-      completed: true
+      completed: currentStageIndex > 0,
+      primary: currentStageIndex === 0
     },
     {
       number: "2",
       label: "Choose Positioning",
       href: `/app/projects/${projectSlug}/positioning`,
-      completed: true
+      completed: currentStageIndex > 1,
+      primary: currentStageIndex === 1
     },
     {
       number: "3",
       label: "Generate Launch Actions",
       href: `/app/projects/${projectSlug}/execution`,
-      completed: false,
-      primary: true
+      completed: currentStageIndex > 2,
+      primary: currentStageIndex === 2 || currentStageIndex === 3
     }
   ];
+
+  // Format memory highlights
+  const memoryHighlights =
+    memory
+      ?.slice(0, 4)
+      .map((m) => ({
+        key: m.memory_key,
+        value: typeof m.memory_value === "string" ? m.memory_value : JSON.stringify(m.memory_value)
+      })) ?? [];
+
+  // Format source docs (sources endpoint not yet implemented)
+  const sourceDocs = sources.map((s) => ({
+    title: s.title ?? s.url ?? "Untitled",
+    type: s.source_type
+  }));
+
+  // Format timeline from activity
+  const timeline =
+    activity?.slice(0, 5).map((a) => ({
+      text: `${a.verb}${a.object_type ? ` ${a.object_type}` : ""}`,
+      time: formatTimeAgo(a.created_at)
+    })) ?? [];
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -42,9 +127,7 @@ export default async function ProjectOverviewPage({
             </svg>
             Start Here
           </h2>
-          <p className="mt-2 text-sm text-fg-muted">
-            Use these primary actions to move the project forward in order.
-          </p>
+          <p className="mt-2 text-sm text-fg-muted">Use these primary actions to move the project forward in order.</p>
           <div className="mt-4 space-y-2">
             {steps.map((step, index) => (
               <Link
@@ -61,11 +144,7 @@ export default async function ProjectOverviewPage({
               >
                 <span
                   className={`flex h-6 w-6 items-center justify-center rounded-full font-mono text-xs ${
-                    step.completed
-                      ? "bg-emerald-500/20"
-                      : step.primary
-                        ? "bg-white/20"
-                        : "bg-surface-elevated"
+                    step.completed ? "bg-emerald-500/20" : step.primary ? "bg-white/20" : "bg-surface-elevated"
                   }`}
                 >
                   {step.completed ? (
@@ -97,35 +176,25 @@ export default async function ProjectOverviewPage({
           <ul className="mt-4 space-y-3">
             <li className="flex items-center justify-between rounded-lg border border-edge-subtle bg-surface-elevated px-3 py-2">
               <span className="text-sm text-fg-muted">Stage</span>
-              <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium text-accent">
-                Positioning selected
+              <span className="rounded-full bg-accent-subtle px-2 py-0.5 text-xs font-medium capitalize text-accent">
+                {project?.stage ?? "Unknown"}
               </span>
             </li>
             <li className="flex items-center justify-between rounded-lg border border-edge-subtle bg-surface-elevated px-3 py-2">
-              <span className="text-sm text-fg-muted">Pending approvals</span>
-              <span className="font-mono text-sm font-semibold text-amber-400">1</span>
+              <span className="text-sm text-fg-muted">Status</span>
+              <span className="text-sm capitalize text-fg-secondary">{project?.status ?? "Unknown"}</span>
             </li>
             <li className="flex items-center justify-between rounded-lg border border-edge-subtle bg-surface-elevated px-3 py-2">
-              <span className="text-sm text-fg-muted">Recent activity</span>
-              <span className="text-sm text-fg-secondary">Email batch prepared</span>
+              <span className="text-sm text-fg-muted">Memory items</span>
+              <span className="font-mono text-sm font-semibold text-fg-secondary">{memory?.length ?? 0}</span>
             </li>
           </ul>
         </article>
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <MemoryHighlightsCard
-          items={[
-            { key: "Selected ICP", value: "CS students launching portfolio tools" },
-            { key: "Preferred channel", value: "Email outreach" }
-          ]}
-        />
-        <SourceDocsCard
-          docs={[
-            { title: "Initial brief", type: "manual_note" },
-            { title: "Landing page", type: "website" }
-          ]}
-        />
+        <MemoryHighlightsCard items={memoryHighlights} />
+        <SourceDocsCard docs={sourceDocs} />
       </div>
 
       <section className="rounded-xl border border-edge-subtle bg-surface-muted p-5">
@@ -141,28 +210,30 @@ export default async function ProjectOverviewPage({
           Recent Timeline
         </h2>
         <div className="relative mt-4">
-          <div className="absolute bottom-4 left-[11px] top-0 w-0.5 bg-edge-subtle" />
-          <ul className="space-y-4">
-            {[
-              { text: "Project bootstrapped", time: "2 days ago" },
-              { text: "Research run completed", time: "1 day ago" },
-              { text: "Positioning version selected", time: "3 hours ago" }
-            ].map((item, index) => (
-              <li
-                key={item.text}
-                className="relative flex gap-4 animate-slide-up"
-                style={{ animationDelay: `${index * 75}ms` }}
-              >
-                <div className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-accent bg-surface-muted">
-                  <div className="h-2 w-2 rounded-full bg-accent" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm text-fg-secondary">{item.text}</p>
-                  <p className="mt-0.5 text-xs text-fg-faint">{item.time}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {timeline.length === 0 ? (
+            <p className="text-sm text-fg-muted">No activity yet.</p>
+          ) : (
+            <>
+              <div className="absolute bottom-4 left-[11px] top-0 w-0.5 bg-edge-subtle" />
+              <ul className="space-y-4">
+                {timeline.map((item, index) => (
+                  <li
+                    key={`${item.text}-${index}`}
+                    className="relative flex gap-4 animate-slide-up"
+                    style={{ animationDelay: `${index * 75}ms` }}
+                  >
+                    <div className="relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 border-accent bg-surface-muted">
+                      <div className="h-2 w-2 rounded-full bg-accent" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm capitalize text-fg-secondary">{item.text}</p>
+                      <p className="mt-0.5 text-xs text-fg-faint">{item.time}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </section>
     </div>

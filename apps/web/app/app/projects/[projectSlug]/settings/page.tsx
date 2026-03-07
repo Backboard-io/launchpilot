@@ -1,4 +1,23 @@
-export default function ProjectSettingsPage() {
+import { serverApiFetch } from "@/lib/api";
+
+interface Project {
+  id: string;
+  slug: string;
+  name: string;
+  summary: string | null;
+  goal: string | null;
+  website_url?: string | null;
+  repo_url?: string | null;
+  status: string;
+}
+
+export default async function ProjectSettingsPage({ params }: { params: Promise<{ projectSlug: string }> }) {
+  const { projectSlug } = await params;
+
+  // Fetch project data
+  const projects = (await serverApiFetch<Project[]>("/projects")) ?? [];
+  const project = projects.find((p) => p.slug === projectSlug);
+
   return (
     <div className="space-y-6">
       <header>
@@ -8,12 +27,60 @@ export default function ProjectSettingsPage() {
 
       <section className="rounded-lg border border-edge-subtle bg-surface-elevated p-4">
         <h3 className="text-sm font-medium text-fg-primary">General</h3>
-        <p className="mt-2 text-sm text-fg-secondary">Update project summary, goal, and URLs.</p>
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-fg-muted">Name</span>
+            <span className="text-sm text-fg-secondary">{project?.name ?? "—"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-fg-muted">Summary</span>
+            <span className="text-sm text-fg-secondary">{project?.summary ?? "—"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-fg-muted">Goal</span>
+            <span className="text-sm text-fg-secondary">{project?.goal ?? "—"}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-fg-muted">Status</span>
+            <span className="text-sm capitalize text-fg-secondary">{project?.status ?? "—"}</span>
+          </div>
+        </div>
       </section>
 
       <section className="rounded-lg border border-edge-subtle bg-surface-elevated p-4">
-        <h3 className="text-sm font-medium text-fg-primary">Connected Accounts</h3>
-        <p className="mt-2 text-sm text-fg-secondary">GitHub: linked. Google: linked. Token Vault: optional.</p>
+        <h3 className="text-sm font-medium text-fg-primary">URLs</h3>
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-fg-muted">Website</span>
+            {project?.website_url ? (
+              <a
+                href={project.website_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-accent hover:underline"
+              >
+                {project.website_url}
+              </a>
+            ) : (
+              <span className="text-sm text-fg-faint">Not set</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-fg-muted">Repository</span>
+            {project?.repo_url ? (
+              <a
+                href={project.repo_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-accent hover:underline"
+              >
+                {project.repo_url}
+              </a>
+            ) : (
+              <span className="text-sm text-fg-faint">Not set</span>
+            )}
+          </div>
+        </div>
       </section>
     </div>
   );

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CompetitorTable } from "@/components/research/competitor-table";
 import { PainPointMap } from "@/components/research/pain-point-map";
 import { WedgeCard } from "@/components/research/wedge-card";
-import { env } from "@/lib/env";
+import { apiFetch } from "@/lib/api";
 
 type AgentMode = "baseline" | "deepen" | "retry" | "extend";
 
@@ -42,12 +42,11 @@ export default function ResearchPage() {
   const [lastTrace, setLastTrace] = useState<Record<string, unknown> | null>(null);
 
   const loadSnapshot = useCallback(async (resolvedProjectId: string) => {
-    const response = await fetch(`${env.apiBaseUrl}/projects/${resolvedProjectId}/research`, { cache: "no-store" });
-    if (!response.ok) {
+    const data = await apiFetch<ResearchState>(`/projects/${resolvedProjectId}/research`);
+    if (!data) {
       throw new Error("Failed to load research snapshot");
     }
-    const payload = await response.json();
-    setState(payload.data as ResearchState);
+    setState(data);
   }, []);
 
   const load = useCallback(async () => {
@@ -57,12 +56,10 @@ export default function ResearchPage() {
     setLoading(true);
     setError(null);
     try {
-      const projectsResponse = await fetch(`${env.apiBaseUrl}/projects`, { cache: "no-store" });
-      if (!projectsResponse.ok) {
+      const projects = await apiFetch<ProjectRow[]>("/projects");
+      if (!projects) {
         throw new Error("Failed to load projects");
       }
-      const projectsPayload = await projectsResponse.json();
-      const projects = (projectsPayload.data ?? []) as ProjectRow[];
       const project = projects.find((item) => item.slug === projectSlug);
       if (!project) {
         throw new Error("Project not found for this slug");
@@ -88,19 +85,22 @@ export default function ResearchPage() {
       setRunning(true);
       setError(null);
       try {
-        const response = await fetch(`${env.apiBaseUrl}/projects/${projectId}/research/${endpoint}`, {
+        const data = await apiFetch<{
+          agent_trace?: Record<string, unknown>;
+          run?: { status?: string; summary?: string };
+          competitors?: Array<{ name: string; positioning?: string; pricing_summary?: string }>;
+          pain_point_clusters?: Array<{ label: string; description?: string; rank?: number }>;
+          opportunity_wedges?: Array<{ id?: string; label: string; description?: string; score?: number }>;
+        }>(`/projects/${projectId}/research/${endpoint}`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             advice: advice.trim() || null,
             mode
           })
         });
-        if (!response.ok) {
+        if (!data) {
           throw new Error(`Research ${endpoint} failed`);
         }
-        const payload = await response.json();
-        const data = payload.data ?? {};
         setLastTrace((data.agent_trace ?? null) as Record<string, unknown> | null);
         setState({
           run: data.run,

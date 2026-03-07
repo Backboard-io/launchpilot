@@ -8,7 +8,7 @@ import { ActionQueue } from "@/components/execution/action-queue";
 import { AssetCard } from "@/components/execution/asset-card";
 import { OutreachTable } from "@/components/execution/outreach-table";
 import { PlanBoard } from "@/components/execution/plan-board";
-import { env } from "@/lib/env";
+import { apiFetch } from "@/lib/api";
 
 type AgentMode = "baseline" | "deepen" | "retry" | "extend";
 
@@ -52,12 +52,11 @@ export default function ExecutionPage() {
   const [lastTrace, setLastTrace] = useState<Record<string, unknown> | null>(null);
 
   const loadState = useCallback(async (resolvedProjectId: string) => {
-    const response = await fetch(`${env.apiBaseUrl}/projects/${resolvedProjectId}/execution/state`, { cache: "no-store" });
-    if (!response.ok) {
+    const data = await apiFetch<ExecutionState>(`/projects/${resolvedProjectId}/execution/state`);
+    if (!data) {
       throw new Error("Failed to load execution state");
     }
-    const payload = await response.json();
-    setState(payload.data as ExecutionState);
+    setState(data);
   }, []);
 
   const load = useCallback(async () => {
@@ -67,12 +66,10 @@ export default function ExecutionPage() {
     setLoading(true);
     setError(null);
     try {
-      const projectsResponse = await fetch(`${env.apiBaseUrl}/projects`, { cache: "no-store" });
-      if (!projectsResponse.ok) {
+      const projects = await apiFetch<ProjectRow[]>("/projects");
+      if (!projects) {
         throw new Error("Failed to load projects");
       }
-      const projectsPayload = await projectsResponse.json();
-      const projects = (projectsPayload.data ?? []) as ProjectRow[];
       const project = projects.find((item) => item.slug === projectSlug);
       if (!project) {
         throw new Error("Project not found for this slug");
@@ -91,27 +88,23 @@ export default function ExecutionPage() {
   }, [load]);
 
   const runAgentAction = useCallback(
-    async (
-      key: string,
-      path: string,
-      body: Record<string, unknown>
-    ) => {
+    async (key: string, path: string, body: Record<string, unknown>) => {
       if (!projectId) {
         return;
       }
       setRunningAction(key);
       setError(null);
       try {
-        const response = await fetch(`${env.apiBaseUrl}/projects/${projectId}/execution/${path}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body)
-        });
-        if (!response.ok) {
+        const data = await apiFetch<{ agent_trace?: Record<string, unknown> }>(
+          `/projects/${projectId}/execution/${path}`,
+          {
+            method: "POST",
+            body: JSON.stringify(body)
+          }
+        );
+        if (!data) {
           throw new Error(`Failed action: ${key}`);
         }
-        const payload = await response.json();
-        const data = payload.data ?? {};
         setLastTrace((data.agent_trace ?? null) as Record<string, unknown> | null);
         await loadState(projectId);
       } catch (actionError) {
@@ -130,9 +123,8 @@ export default function ExecutionPage() {
     setRunningAction("add-contact");
     setError(null);
     try {
-      const response = await fetch(`${env.apiBaseUrl}/projects/${projectId}/execution/contacts`, {
+      const result = await apiFetch(`/projects/${projectId}/execution/contacts`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contacts: [
             {
@@ -143,7 +135,7 @@ export default function ExecutionPage() {
           ]
         })
       });
-      if (!response.ok) {
+      if (result === null) {
         throw new Error("Failed to add contact");
       }
       setContactName("");
