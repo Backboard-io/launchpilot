@@ -191,6 +191,52 @@ def _parse_owner_repo_from_value(value: str) -> tuple[str, str] | None:
     return owner, repo
 
 
+def _build_repo_summary_for_memory(github_repo_context: dict[str, Any], *, project_id: str) -> dict[str, Any]:
+    files = github_repo_context.get("files")
+    if not isinstance(files, list):
+        files = []
+
+    extension_counts: dict[str, int] = {}
+    summarized_files: list[dict[str, Any]] = []
+    for file_item in files:
+        if not isinstance(file_item, dict):
+            continue
+        path = str(file_item.get("path") or "")
+        snippet = str(file_item.get("snippet") or "")
+        size = file_item.get("size")
+        extension = ""
+        if "." in path:
+            extension = f".{path.split('.')[-1].lower()}"
+            extension_counts[extension] = extension_counts.get(extension, 0) + 1
+        first_non_empty_line = ""
+        for line in snippet.splitlines():
+            line = line.strip()
+            if line:
+                first_non_empty_line = line[:180]
+                break
+        summarized_files.append(
+            {
+                "path": path,
+                "size": size,
+                "extension": extension or None,
+                "line_count_estimate": len(snippet.splitlines()),
+                "first_line_preview": first_non_empty_line or None,
+            }
+        )
+
+    top_extensions = sorted(extension_counts.items(), key=lambda item: item[1], reverse=True)[:10]
+    return {
+        "project_id": project_id,
+        "repo": github_repo_context.get("repo"),
+        "branch": github_repo_context.get("branch"),
+        "path": github_repo_context.get("path"),
+        "files_considered": github_repo_context.get("files_considered"),
+        "files_included": github_repo_context.get("files_included"),
+        "top_extensions": [{"extension": ext, "count": count} for ext, count in top_extensions],
+        "files": summarized_files,
+    }
+
+
 @router.post("/run")
 def run_research(
     project_id: UUID,
@@ -202,6 +248,7 @@ def run_research(
     project = ProjectService(db).get_project_or_404(project_id)
 
     context = build_project_context(db, project_id)
+    backboard = BackboardStageService(db)
     extra_task_instructions: str | None = None
     github_repo_context = {"included": False, "reason": "not_requested"}
     if payload.github_repo:
@@ -258,10 +305,10 @@ def run_research(
         else:
             github_repo_context = {"included": False, "reason": "invalid_project_repo_url"}
 
-    if "repo:read" in current_user.scopes:
+    if "repo:read" in current_user.scopes and "github_repo" not in context:
         connector = Auth0GithubConnector()
         token = connector.github_access_token(current_user.sub)
-        if token and "github_repo" not in context:
+        if token:
             try:
                 repos = GitHubClient().list_user_repos(token, per_page=20)
                 github_repo_context = {
@@ -276,15 +323,33 @@ def run_research(
                 github_repo_context = {"included": False, "reason": f"github_fetch_failed:{exc}"}
         else:
             github_repo_context = {"included": False, "reason": "github_not_linked"}
-    else:
+    elif "repo:read" not in current_user.scopes:
         github_repo_context = {"included": False, "reason": "missing_repo_read_scope"}
+
+    if "github_repo" in context:
+        repo_summary = _build_repo_summary_for_memory(context["github_repo"], project_id=str(project_id))
+        try:
+            repo_memory_sync = backboard.persist_repo_summary_memory(
+                project_id=str(project_id),
+                project_name=project.name or "project",
+                repo_summary=repo_summary,
+            )
+            github_repo_context["backboard_memory_sync"] = {"status": "ok", **repo_memory_sync}
+        except BackboardRequestError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail={
+                    "code": "BACKBOARD_REPO_MEMORY_SYNC_FAILED",
+                    "message": f"Failed to persist repository summary into Backboard memory: {exc}",
+                },
+            ) from exc
 
     if payload.pinned_wedge_ids:
         context["pinned_wedge_ids"] = [str(item) for item in payload.pinned_wedge_ids]
     try:
         output, trace = run_research_agent(
             context,
-            backboard=BackboardStageService(db),
+            backboard=backboard,
             project_id=str(project_id),
             advice=payload.advice,
             mode=payload.mode,
