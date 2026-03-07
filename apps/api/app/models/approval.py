@@ -35,5 +35,5 @@ class ActivityEvent(Base, UUIDPrimaryKeyMixin):
     verb: Mapped[str] = mapped_column(String, nullable=False)
     object_type: Mapped[str | None] = mapped_column(String)
     object_id: Mapped[str | None] = mapped_column(String)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    event_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

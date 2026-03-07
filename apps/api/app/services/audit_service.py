@@ -24,7 +24,7 @@ class AuditService:
             verb=verb,
             object_type=object_type,
             object_id=object_id,
-            metadata=metadata or {},
+            event_metadata=metadata or {},
         )
         self.db.add(event)
         self.db.flush()

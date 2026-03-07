@@ -177,7 +177,7 @@ def get_project_activity(
                 "verb": row.verb,
                 "object_type": row.object_type,
                 "object_id": row.object_id,
-                "metadata": row.metadata,
+                "metadata": row.event_metadata,
                 "created_at": row.created_at,
             }
             for row in rows
