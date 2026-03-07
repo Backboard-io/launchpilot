@@ -6,13 +6,12 @@ interface WedgeCardProps {
     description?: string;
     score?: number;
   };
+  rank: number;
   onUse?: () => void;
   selected?: boolean;
 }
 
-export function WedgeCard({ wedge, onUse, selected }: WedgeCardProps) {
-  const score = wedge.score ?? 0;
-
+export function WedgeCard({ wedge, rank, onUse, selected }: WedgeCardProps) {
   return (
     <div
       className={cn(
@@ -30,23 +29,10 @@ export function WedgeCard({ wedge, onUse, selected }: WedgeCardProps) {
           )}
         </div>
 
-        {/* Score badge */}
-        <div className="ml-3 flex flex-col items-end">
-          <span className="font-mono text-lg font-bold text-accent">
-            {(score * 100).toFixed(0)}
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-fg-faint">
-            score
-          </span>
+        {/* Rank badge */}
+        <div className="ml-3 flex h-8 w-8 items-center justify-center rounded-full bg-accent/10">
+          <span className="font-mono text-sm font-bold text-accent">#{rank}</span>
         </div>
-      </div>
-
-      {/* Score bar */}
-      <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-surface-elevated">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-accent to-accent-hover transition-all duration-500"
-          style={{ width: `${score * 100}%` }}
-        />
       </div>
 
       {onUse && (

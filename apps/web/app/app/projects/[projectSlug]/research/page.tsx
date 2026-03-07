@@ -353,7 +353,7 @@ export default function ResearchPage() {
                       key={`${wedge.id ?? wedge.label}-${i}`}
                       title={wedge.label}
                       description={wedge.description}
-                      badge={wedge.score ? `${wedge.score}` : undefined}
+                      badge={`#${i + 1}`}
                       badgeColor="emerald"
                     />
                   ))}

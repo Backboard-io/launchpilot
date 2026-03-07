@@ -24,7 +24,7 @@ export function MemoryHighlightsCard({ items }: { items: MemoryItem[] }) {
         <ul className="mt-4 space-y-2">
           {items.map((item, index) => (
             <li
-              key={item.key}
+              key={`${item.key}-${index}`}
               className="rounded-lg border border-edge-subtle bg-surface-elevated p-3 animate-slide-up"
               style={{ animationDelay: `${index * 50}ms` }}
             >
