@@ -6,12 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.positioning import PositioningVersion
-from app.models.project import JobRun, ProjectMemory
+from app.models.project import JobRun
 from app.routers.utils import success
 from app.schemas.positioning import PositioningRunRequest
 from app.security.auth0 import CurrentUser
 from app.security.permissions import require_scope
 from app.services.job_service import JobService
+from app.services.memory_service import upsert_project_memory
 from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/projects/{project_id}/positioning", tags=["positioning"])
@@ -91,30 +92,12 @@ def select_positioning_version(
     db.execute(update(PositioningVersion).where(PositioningVersion.project_id == project_id).values(selected=False))
     version.selected = True
 
-    memory = (
-        db.query(ProjectMemory)
-        .filter(ProjectMemory.project_id == project_id, ProjectMemory.memory_key == "selected_positioning")
-        .first()
-    )
     memory_value = {
         "version_id": str(version.id),
         "icp": version.icp,
         "wedge": version.wedge,
         "headline": version.headline,
     }
-    if memory:
-        memory.memory_value = memory_value
-        memory.memory_type = "decision"
-        memory.source = "user"
-    else:
-        db.add(
-            ProjectMemory(
-                project_id=project_id,
-                memory_key="selected_positioning",
-                memory_value=memory_value,
-                memory_type="decision",
-                source="user",
-            )
-        )
+    upsert_project_memory(db, project_id, "selected_positioning", memory_value, "decision", "user")
     db.commit()
     return success({"selected_version_id": str(version.id)})

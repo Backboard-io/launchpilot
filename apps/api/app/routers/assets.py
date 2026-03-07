@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.execution import Asset
-from app.models.project import ProjectMemory
 from app.routers.utils import success
 from app.security.auth0 import CurrentUser
 from app.security.permissions import require_scope
+from app.services.memory_service import upsert_project_memory
 
 router = APIRouter(tags=["assets"])
 
@@ -48,25 +48,7 @@ def promote_asset(
 
     asset.status = "selected"
     memory_key = f"selected_asset_{asset.asset_type}"
-    memory = (
-        db.query(ProjectMemory)
-        .filter(ProjectMemory.project_id == asset.project_id, ProjectMemory.memory_key == memory_key)
-        .first()
-    )
     memory_value = {"asset_id": str(asset.id), "title": asset.title, "asset_type": asset.asset_type}
-    if memory:
-        memory.memory_value = memory_value
-        memory.memory_type = "decision"
-        memory.source = "user"
-    else:
-        db.add(
-            ProjectMemory(
-                project_id=asset.project_id,
-                memory_key=memory_key,
-                memory_value=memory_value,
-                memory_type="decision",
-                source="user",
-            )
-        )
+    upsert_project_memory(db, asset.project_id, memory_key, memory_value, "decision", "user")
     db.commit()
     return success({"asset_id": str(asset.id), "status": asset.status})

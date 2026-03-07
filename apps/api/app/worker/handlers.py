@@ -19,9 +19,10 @@ from app.integrations.resend_client import ResendClient
 from app.models.approval import Approval
 from app.models.execution import Asset, Contact, LaunchPlan, LaunchTask, OutboundBatch, OutboundMessage
 from app.models.positioning import PositioningVersion
-from app.models.project import AgentRuntime, Project, ProjectMemory
+from app.models.project import AgentRuntime, Project
 from app.models.research import Competitor, OpportunityWedge, PainPointCluster, ResearchRun
 from app.services.audit_service import AuditService
+from app.services.memory_service import upsert_project_memory
 
 
 class WorkerHandlers:
@@ -33,22 +34,19 @@ class WorkerHandlers:
         self.audit = AuditService(db)
 
     def handle(self, job_type: str, project_id, payload: dict) -> dict:
-        if job_type == "project.bootstrap":
-            return self.project_bootstrap(project_id)
-        if job_type == "research.run":
-            return self.research_run(project_id, payload)
-        if job_type == "positioning.run":
-            return self.positioning_run(project_id, payload)
-        if job_type == "execution.plan":
-            return self.execution_plan(project_id, payload)
-        if job_type == "execution.generate_assets":
-            return self.execution_generate_assets(project_id, payload)
-        if job_type == "execution.prepare_email_batch":
-            return self.execution_prepare_email_batch(project_id, payload)
-        if job_type == "execution.send_email_batch":
-            return self.execution_send_email_batch(project_id, payload)
-        if job_type == "creative.render_video":
-            return self.creative_render_video(project_id, payload)
+        handlers = {
+            "project.bootstrap": lambda: self.project_bootstrap(project_id),
+            "research.run": lambda: self.research_run(project_id, payload),
+            "positioning.run": lambda: self.positioning_run(project_id, payload),
+            "execution.plan": lambda: self.execution_plan(project_id, payload),
+            "execution.generate_assets": lambda: self.execution_generate_assets(project_id, payload),
+            "execution.prepare_email_batch": lambda: self.execution_prepare_email_batch(project_id, payload),
+            "execution.send_email_batch": lambda: self.execution_send_email_batch(project_id, payload),
+            "creative.render_video": lambda: self.creative_render_video(project_id, payload),
+        }
+        handler = handlers.get(job_type)
+        if handler:
+            return handler()
         raise ValueError(f"Unsupported job type: {job_type}")
 
     def project_bootstrap(self, project_id) -> dict:
@@ -74,19 +72,7 @@ class WorkerHandlers:
             ("project_goal", {"value": project.goal}, "decision"),
         ]
         for key, value, memory_type in seed_entries:
-            row = self.db.query(ProjectMemory).filter(ProjectMemory.project_id == project_id, ProjectMemory.memory_key == key).first()
-            if row:
-                row.memory_value = value
-            else:
-                self.db.add(
-                    ProjectMemory(
-                        project_id=project_id,
-                        memory_key=key,
-                        memory_value=value,
-                        memory_type=memory_type,
-                        source="system",
-                    )
-                )
+            upsert_project_memory(self.db, project_id, key, value, memory_type, "system")
 
         self.audit.log(project_id, "system", None, "project.bootstrapped", "project", str(project_id))
         return {"runtime_created": True, "project_id": str(project_id)}
@@ -137,22 +123,8 @@ class WorkerHandlers:
                 )
             )
 
-        memory = self.db.query(ProjectMemory).filter(
-            ProjectMemory.project_id == project_id, ProjectMemory.memory_key == "recommended_wedge_candidates"
-        ).first()
         memory_value = {"wedges": [w["label"] for w in output.get("opportunity_wedges", [])]}
-        if memory:
-            memory.memory_value = memory_value
-        else:
-            self.db.add(
-                ProjectMemory(
-                    project_id=project_id,
-                    memory_key="recommended_wedge_candidates",
-                    memory_value=memory_value,
-                    memory_type="fact",
-                    source="agent",
-                )
-            )
+        upsert_project_memory(self.db, project_id, "recommended_wedge_candidates", memory_value, "fact", "agent")
 
         self.audit.log(project_id, "agent", "research_agent", "research.generated", "research_run", None)
         return output
@@ -297,10 +269,13 @@ class WorkerHandlers:
             raise ValueError("Batch not found")
 
         messages = self.db.query(OutboundMessage).filter(OutboundMessage.batch_id == batch.id).all()
+        contact_ids = [message.contact_id for message in messages]
+        contacts = self.db.query(Contact).filter(Contact.id.in_(contact_ids)).all() if contact_ids else []
+        contact_by_id = {contact.id: contact for contact in contacts}
 
         sent_count = 0
         for message in messages:
-            contact = self.db.query(Contact).filter(Contact.id == message.contact_id).first()
+            contact = contact_by_id.get(message.contact_id)
             to_email = contact.email if contact else None
             if not to_email:
                 message.status = "failed"
