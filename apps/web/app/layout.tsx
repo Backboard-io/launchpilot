@@ -5,7 +5,7 @@ import { ReactNode } from "react";
 
 export const metadata: Metadata = {
   title: "Growth Launchpad",
-  description: "Supervised multi-agent launch workspace"
+  description: "Supervised multi-agent launch flow"
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

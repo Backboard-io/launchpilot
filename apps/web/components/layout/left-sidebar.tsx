@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 const links = [
-  { label: "Workspace", href: "/app/select-workspace" },
-  { label: "Projects", href: "/app" },
+  { label: "Projects Dashboard", href: "/app/projects" },
+  { label: "Create Project", href: "/app/projects/new" },
   { label: "Security", href: "/app/settings/security" }
 ];
 

@@ -3,10 +3,8 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/ui/status-badge";
 
 export function ProjectCard({
-  workspaceSlug,
   project
 }: {
-  workspaceSlug: string;
   project: { slug: string; name: string; stage: string; wedge?: string; approvals?: number };
 }) {
   return (
@@ -18,7 +16,7 @@ export function ProjectCard({
       <p className="mt-2 text-sm text-slate-600">Latest wedge: {project.wedge ?? "Not selected"}</p>
       <p className="text-sm text-slate-600">Pending approvals: {project.approvals ?? 0}</p>
       <Link
-        href={`/app/workspace/${workspaceSlug}/projects/${project.slug}`}
+        href={`/app/projects/${project.slug}`}
         className="mt-4 inline-block rounded-md bg-brand-600 px-3 py-1.5 text-sm text-white"
       >
         Open Project

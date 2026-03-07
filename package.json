@@ -1,17 +1,11 @@
 {
   "name": "growth-launchpad",
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "scripts": {
-    "build": "turbo run build",
-    "dev": "turbo run dev",
-    "lint": "turbo run lint",
-    "test": "turbo run test"
-  },
-  "devDependencies": {
-    "turbo": "^2.5.0"
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "lint": "npm --prefix apps/web run lint",
+    "test": "npm --prefix apps/web run test",
+    "install:web": "npm --prefix apps/web install"
   }
 }

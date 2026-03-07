@@ -14,7 +14,7 @@ export default function LandingPage() {
       <section className="grid flex-1 items-center gap-10 md:grid-cols-2">
         <div className="space-y-6">
           <p className="inline-block rounded-full bg-brand-100 px-3 py-1 text-xs font-medium text-brand-700">
-            Product-first GTM workspace
+            Project-first GTM flow
           </p>
           <h2 className="text-5xl font-semibold tracking-tight text-slate-900">
             Turn a rough build into a real launch system.
@@ -27,7 +27,7 @@ export default function LandingPage() {
               Start with Auth0
             </Link>
             <Link href="/app" className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium">
-              Open Workspace
+              Open Projects
             </Link>
           </div>
         </div>

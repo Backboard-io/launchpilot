@@ -1,11 +1,8 @@
-import { handleAuth } from "@auth0/nextjs-auth0";
 import { NextResponse } from "next/server";
 
-import { getAuth0ConfigError, isAuthEnabled } from "@/lib/auth0";
+import { auth0, getAuth0ConfigError, isAuthEnabled } from "@/lib/auth0";
 
-const authHandler = handleAuth();
-
-export async function GET(request: Request, context: { params: Promise<{ auth0: string }> }) {
+export async function GET(request: Request) {
   if (!isAuthEnabled()) {
     return NextResponse.json(
       {
@@ -16,10 +13,10 @@ export async function GET(request: Request, context: { params: Promise<{ auth0: 
       { status: 500 }
     );
   }
-  return authHandler(request, context);
+  return auth0!.middleware(request);
 }
 
-export async function POST(request: Request, context: { params: Promise<{ auth0: string }> }) {
+export async function POST(request: Request) {
   if (!isAuthEnabled()) {
     return NextResponse.json(
       {
@@ -30,5 +27,5 @@ export async function POST(request: Request, context: { params: Promise<{ auth0:
       { status: 500 }
     );
   }
-  return authHandler(request, context);
+  return auth0!.middleware(request);
 }

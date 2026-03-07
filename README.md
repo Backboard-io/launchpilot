@@ -2,7 +2,7 @@
 
 Growth Launchpad is a hackathon-focused MVP for supervised, multi-agent product launches.
 
-This repo implements the architecture defined in `design.md`:
+This repository implements the architecture in `design.md` with a project-first UX:
 - Next.js frontend (`apps/web`)
 - FastAPI API + worker (`apps/api`)
 - Postgres-backed queue/state
@@ -10,7 +10,7 @@ This repo implements the architecture defined in `design.md`:
 
 ## What this MVP does
 
-- Project/workspace creation and sync
+- Project creation and bootstrap
 - Research, positioning, and execution workflows
 - Persistent project memory and activity timeline
 - Asset generation and promotion
@@ -18,10 +18,9 @@ This repo implements the architecture defined in `design.md`:
 
 ## Repo layout
 
-- `apps/web`: Next.js App Router product UI
+- `apps/web`: Next.js App Router UI (project-first dashboard)
 - `apps/api`: FastAPI API, worker, SQLAlchemy models, Alembic migrations
-- `packages/shared-types`: shared TypeScript types
-- `infra/docker`: local Docker Compose
+- `infra/docker`: local Docker Compose for API/worker/DB
 - `infra/scripts`: utility scripts (including demo seeding)
 
 ## Prerequisites
@@ -39,18 +38,18 @@ This repo implements the architecture defined in `design.md`:
    - production-like mode: Auth0, Supabase, Backboard, Google, and Resend credentials
 
 Notes:
-- The API has a local fallback identity mode when Auth0 verification env vars are not set.
+- API has local fallback identity mode when Auth0 verification env vars are not set.
 - Resend and Google integrations degrade to mock behavior when API keys are absent.
 
 ## Local development
 
-### 1. Install frontend deps
+### 1. Install web dependencies
 
 ```bash
-npm install
+npm run install:web
 ```
 
-### 2. Install API deps
+### 2. Install API dependencies
 
 ```bash
 cd apps/api
@@ -59,7 +58,7 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-### 3. Run migrations
+### 3. Run API migrations
 
 From `apps/api`:
 
@@ -88,7 +87,7 @@ python -m app.worker.runner
 From repo root:
 
 ```bash
-npm run dev --workspace web
+npm run dev
 ```
 
 ## Docker quickstart (optional)
@@ -99,14 +98,17 @@ docker compose -f infra/docker/docker-compose.yml up --build
 
 This starts:
 - Postgres
+- Migration job
 - API
 - Worker
+
+Note: frontend is not run by Docker Compose in this repo. Run it with `npm run dev`.
 
 ## API overview
 
 Base URL: `http://localhost:8000/v1`
 
-### Identity + workspace
+### Identity
 
 - `GET /me`
 - `GET /workspaces`
@@ -174,21 +176,22 @@ python infra/scripts/seed_demo.py
 - `/`
 - `/login`
 - `/app`
-- `/app/select-workspace`
-- `/app/workspace/[workspaceSlug]`
-- `/app/workspace/[workspaceSlug]/projects/new`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]/research`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]/positioning`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]/execution`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]/approvals`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]/memory`
-- `/app/workspace/[workspaceSlug]/projects/[projectSlug]/settings`
+- `/app/projects`
+- `/app/projects/new`
+- `/app/projects/[projectSlug]`
+- `/app/projects/[projectSlug]/research`
+- `/app/projects/[projectSlug]/positioning`
+- `/app/projects/[projectSlug]/execution`
+- `/app/projects/[projectSlug]/approvals`
+- `/app/projects/[projectSlug]/memory`
+- `/app/projects/[projectSlug]/settings`
 - `/app/settings/security`
+
+Legacy workspace routes still exist as redirects for backward compatibility.
 
 ## Implementation notes
 
-- Hackathon-first design: API and worker use simple, explicit service flows.
+- Hackathon-first design: explicit service flows and minimal abstractions.
 - Postgres is the single durable state store for app data and queue state.
 - Browser writes are API-mediated; sensitive actions are approval-gated.
 - Auth0 is the intended production trust boundary, with local fallback for dev velocity.

@@ -7,8 +7,11 @@ export function TopBar() {
         <p className="text-sm font-semibold">Growth Launchpad</p>
       </div>
       <nav className="flex items-center gap-3 text-xs">
-        <Link href="/app/select-workspace" className="rounded-md border border-slate-300 px-2 py-1">
-          Workspace
+        <Link href="/app/projects" className="rounded-md border border-slate-300 px-2 py-1">
+          Projects
+        </Link>
+        <Link href="/app/projects/new" className="rounded-md bg-brand-600 px-2 py-1 text-white">
+          New Project
         </Link>
         <Link href="/app/settings/security" className="rounded-md border border-slate-300 px-2 py-1">
           Security
