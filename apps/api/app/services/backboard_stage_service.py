@@ -5,6 +5,7 @@ import json
 import re
 import ast
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -43,6 +44,67 @@ class BackboardStageService:
     @property
     def enabled(self) -> bool:
         return bool(self.settings.backboard_api_key)
+
+    def persist_repo_summary_memory(
+        self,
+        *,
+        project_id: str,
+        project_name: str,
+        repo_summary: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self.enabled:
+            raise BackboardRequestError("BACKBOARD_API_KEY is not configured")
+
+        assistant_id, _thread_id = self._get_or_create_stage_session(
+            project_id=project_id,
+            project_name=project_name,
+            stage="repo_context",
+            system_prompt=(
+                "You are a repository memory assistant. Store factual project repository context "
+                "for future planning. Treat stored memories as ground truth snapshots."
+            ),
+        )
+
+        capsule = {
+            "type": "repo_context_summary",
+            "project_id": project_id,
+            "project_name": project_name,
+            "synced_at": datetime.now(timezone.utc).isoformat(),
+            "repo_summary": repo_summary,
+        }
+        serialized = json.dumps(capsule, ensure_ascii=True)
+        if len(serialized) > 14000:
+            trimmed = dict(repo_summary)
+            files = repo_summary.get("files") if isinstance(repo_summary, dict) else None
+            if isinstance(files, list):
+                trimmed["files"] = files[:10]
+            capsule["repo_summary"] = trimmed
+            serialized = json.dumps(capsule, ensure_ascii=True)
+            if len(serialized) > 14000:
+                capsule["repo_summary"] = {"warning": "repo_summary_truncated", "repo": trimmed.get("repo")}
+                serialized = json.dumps(capsule, ensure_ascii=True)
+
+        raw = self.client.add_memory(assistant_id, serialized)
+        result = {
+            "assistant_id": assistant_id,
+            "memory_id": self._extract_value(raw, ("memory_id", "id")),
+            "memory_operation_id": self._extract_value(raw, ("memory_operation_id", "operation_id")),
+        }
+        upsert_project_memory(
+            self.db,
+            project_id,
+            "backboard_repo_context_last_sync",
+            {
+                "assistant_id": assistant_id,
+                "repo": (repo_summary.get("repo") if isinstance(repo_summary, dict) else None),
+                "synced_at": capsule["synced_at"],
+                "memory_id": result.get("memory_id"),
+                "memory_operation_id": result.get("memory_operation_id"),
+            },
+            "integration_ref",
+            "backboard",
+        )
+        return result
 
     def run_json_stage(
         self,

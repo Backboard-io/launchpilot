@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import time
 
 import httpx
 
@@ -14,6 +15,7 @@ class BackboardClient:
     api_key: str
     base_url: str = "https://app.backboard.io/api"
     timeout_seconds: float = 60.0
+    retries: int = 2
 
     def _headers(self) -> dict[str, str]:
         return {"X-API-Key": self.api_key}
@@ -23,8 +25,7 @@ class BackboardClient:
 
     def create_assistant(self, name: str, system_prompt: str) -> str:
         payload = {"name": name, "system_prompt": system_prompt}
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(self._url("/assistants"), json=payload, headers=self._headers())
+        response = self._request("POST", "/assistants", json=payload)
         data = self._parse_response(response, "create assistant")
         assistant_id = data.get("assistant_id")
         if not assistant_id:
@@ -32,11 +33,7 @@ class BackboardClient:
         return assistant_id
 
     def create_thread(self, assistant_id: str) -> str:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(
-                self._url(f"/assistants/{assistant_id}/threads"),
-                headers=self._headers(),
-            )
+        response = self._request("POST", f"/assistants/{assistant_id}/threads")
         data = self._parse_response(response, "create thread")
         thread_id = data.get("thread_id")
         if not thread_id:
@@ -59,47 +56,59 @@ class BackboardClient:
             "llm_provider": llm_provider,
             "model_name": model_name,
         }
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(
-                self._url(f"/threads/{thread_id}/messages"),
-                headers=self._headers(),
-                data=payload,
-            )
+        response = self._request(
+            "POST",
+            f"/threads/{thread_id}/messages",
+            data=payload,
+            timeout=max(self.timeout_seconds, 120.0),
+        )
         return self._parse_response(response, "add message")
 
     def get_thread(self, thread_id: str) -> dict:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(
-                self._url(f"/threads/{thread_id}"),
-                headers=self._headers(),
-            )
+        response = self._request("GET", f"/threads/{thread_id}")
         return self._parse_response(response, "get thread")
 
     def add_memory(self, assistant_id: str, content: str) -> dict:
         payload = {"content": content}
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.post(
-                self._url(f"/assistants/{assistant_id}/memories"),
-                headers=self._headers(),
-                json=payload,
-            )
+        response = self._request("POST", f"/assistants/{assistant_id}/memories", json=payload)
         return self._parse_response(response, "add memory")
 
     def list_memories(self, assistant_id: str) -> dict:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(
-                self._url(f"/assistants/{assistant_id}/memories"),
-                headers=self._headers(),
-            )
+        response = self._request("GET", f"/assistants/{assistant_id}/memories")
         return self._parse_response(response, "list memories")
 
     def get_memory_stats(self, assistant_id: str) -> dict:
-        with httpx.Client(timeout=self.timeout_seconds) as client:
-            response = client.get(
-                self._url(f"/assistants/{assistant_id}/memories/stats"),
-                headers=self._headers(),
-            )
+        response = self._request("GET", f"/assistants/{assistant_id}/memories/stats")
         return self._parse_response(response, "get memory stats")
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        *,
+        timeout: float | None = None,
+        **kwargs,
+    ) -> httpx.Response:
+        request_timeout = timeout if timeout is not None else self.timeout_seconds
+        last_exc: Exception | None = None
+        for attempt in range(self.retries + 1):
+            try:
+                with httpx.Client(timeout=request_timeout) as client:
+                    return client.request(
+                        method=method,
+                        url=self._url(path),
+                        headers=self._headers(),
+                        **kwargs,
+                    )
+            except (httpx.ReadTimeout, httpx.ConnectTimeout, httpx.NetworkError, httpx.RemoteProtocolError) as exc:
+                last_exc = exc
+                if attempt < self.retries:
+                    time.sleep(0.4 * (attempt + 1))
+                    continue
+                raise BackboardRequestError(
+                    f"Backboard request failed after {self.retries + 1} attempts: {exc}"
+                ) from exc
+        raise BackboardRequestError(f"Backboard request failed: {last_exc}")
 
     def _parse_response(self, response: httpx.Response, action: str) -> dict:
         if response.is_error:
