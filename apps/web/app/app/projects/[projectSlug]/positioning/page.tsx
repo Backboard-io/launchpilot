@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { AgentChat } from "@/components/chat/agent-chat";
-import { Message } from "@/components/chat/chat-message";
 import {
   InsightCard,
   InsightEmpty,
@@ -14,7 +12,6 @@ import {
   InsightSection
 } from "@/components/chat/insight-panel";
 import { apiFetch } from "@/lib/api";
-import { isLocalMessageId, mergeSavedMessages } from "@/lib/agent-chat";
 
 interface ProjectRow {
   id: string;
@@ -40,55 +37,9 @@ export default function PositioningPage() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [versions, setVersions] = useState<PositioningVersion[]>([]);
   const [loading, setLoading] = useState(true);
-  const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
 
   const selected = versions.find((item) => item.selected) ?? versions[0];
-
-  const loadChatMessages = useCallback(async (resolvedProjectId: string) => {
-    const data = await apiFetch<{ messages: Array<{ id: string; role: string; content: string; timestamp: string }> }>(
-      `/projects/${resolvedProjectId}/chat/positioning`
-    );
-    if (data?.messages) {
-      setMessages(
-        data.messages.map((m) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant" | "system",
-          content: m.content,
-          timestamp: new Date(m.timestamp)
-        }))
-      );
-    }
-  }, []);
-
-  const saveChatMessages = useCallback(
-    async (newMessages: Message[]) => {
-      if (!projectId) return newMessages;
-      const toSave = newMessages.filter((m) => isLocalMessageId(m.id) && m.role === "user");
-
-      if (toSave.length > 0) {
-        const saved = await apiFetch<{ messages: Array<{ id: string; role: string; content: string; timestamp: string }> }>(
-          `/projects/${projectId}/chat/positioning`,
-          {
-          method: "POST",
-          body: JSON.stringify({
-            messages: toSave.map((m) => ({
-              role: m.role,
-              content: m.content
-            }))
-          })
-          }
-        );
-        const merged = mergeSavedMessages(newMessages, saved?.messages ?? []);
-        setMessages(merged);
-        return merged;
-      }
-      setMessages(newMessages);
-      return newMessages;
-    },
-    [projectId]
-  );
 
   const loadVersions = useCallback(async (resolvedProjectId: string) => {
     const data = await apiFetch<{ versions?: PositioningVersion[] }>(
@@ -96,8 +47,7 @@ export default function PositioningPage() {
     );
     if (!data) throw new Error("Failed to load positioning versions");
     setVersions((data.versions ?? []).filter((item) => item.id));
-    await loadChatMessages(resolvedProjectId);
-  }, [loadChatMessages]);
+  }, []);
 
   const load = useCallback(async () => {
     if (!projectSlug) return;
@@ -137,58 +87,6 @@ export default function PositioningPage() {
     };
   }, [loadVersions, projectId]);
 
-  const handleSend = useCallback(
-    async (message: string, mode: string): Promise<string | null> => {
-      if (!projectId) return null;
-      setRunning(true);
-      setError(null);
-
-      try {
-        const endpoint = message.toLowerCase().includes("run") ? "run" : "advise";
-        const data = await apiFetch<{
-          agent_trace?: Record<string, unknown>;
-          chat_message?: string;
-          next_step_suggestion?: string;
-          should_move_to_next_stage?: boolean;
-          next_stage?: string;
-        }>(
-          `/projects/${projectId}/positioning/${endpoint}`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              advice: message,
-              mode
-            })
-          }
-        );
-
-        if (!data) throw new Error(`Positioning ${endpoint} failed`);
-        await loadVersions(projectId);
-
-        const newVersions = versions.length;
-        const stageGuidance =
-          data.next_step_suggestion ||
-          (data.should_move_to_next_stage
-            ? "Positioning is ready. Move to Execution and generate your launch plan."
-            : "Refine one positioning assumption, then re-run for a tighter recommendation.");
-
-        if (data.chat_message?.trim()) {
-          return `${data.chat_message.trim()}\n\n**Next step:** ${stageGuidance}`;
-        }
-
-        return `I've generated positioning options based on your guidance. ${
-          newVersions > 0 ? `You now have **${newVersions} versions** to choose from.` : ""
-        } Review them in the panel and select the one that fits best.\n\n**Next step:** ${stageGuidance}`;
-      } catch (runError) {
-        setError(runError instanceof Error ? runError.message : "Failed to run positioning");
-        return "I encountered an error while processing. Please try again.";
-      } finally {
-        setRunning(false);
-      }
-    },
-    [loadVersions, projectId, versions.length]
-  );
-
   const selectVersion = useCallback(
     async (versionId: string) => {
       if (!projectId) return;
@@ -210,24 +108,9 @@ export default function PositioningPage() {
 
   const continueHref = useMemo(() => `/app/projects/${projectSlug}/execution`, [projectSlug]);
 
-  const quickActions = [
-    {
-      label: "Generate positioning options with ICP, wedge, and messaging strategy",
-      message: "Generate multiple positioning options including ideal customer profile definition, competitive wedge, and core messaging strategy"
-    },
-    {
-      label: "Refine the ICP to focus on highest-value customer segments",
-      message: "Help me narrow down the ideal customer profile to focus on the customer segments with the highest willingness to pay and fastest sales cycles"
-    },
-    {
-      label: "Develop objection handling and competitive differentiation",
-      message: "What objections might customers have about our positioning and how can we address them while strengthening our competitive differentiation?"
-    }
-  ];
-
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-200px)] items-center justify-center">
+      <div className="flex h-full items-center justify-center">
         <div className="flex flex-col items-center gap-3">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-accent border-t-transparent" />
           <p className="text-sm text-fg-muted">Loading positioning...</p>
@@ -237,50 +120,34 @@ export default function PositioningPage() {
   }
 
   return (
-    <div className="animate-fade-in">
-      {/* Header */}
-      <header className="mb-4 flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-fg-primary">Positioning Agent</h2>
-          <p className="mt-1 text-sm text-fg-muted">
-            Craft your ICP, wedge, and messaging through conversation.
-          </p>
-        </div>
-        <Link
-          href={continueHref}
-          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
-        >
-          Continue to Execution
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </Link>
-      </header>
+    <div className="flex h-full min-h-0 flex-col animate-fade-in">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-xl border border-edge-subtle bg-surface-muted">
+          <header className="border-b border-edge-subtle px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-fg-primary">Positioning Agent</h2>
+                <p className="mt-1 text-sm text-fg-muted">
+                  Craft your ICP, wedge, and messaging through conversation.
+                </p>
+              </div>
+              <Link
+                href={continueHref}
+                className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover"
+              >
+                Continue to Execution
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          </header>
 
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          {error}
-        </div>
-      )}
+          {error && (
+            <div className="border-b border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+              {error}
+            </div>
+          )}
 
-      {/* Main Layout */}
-      <div className="grid h-[calc(100vh-280px)] min-h-[500px] gap-4 lg:grid-cols-2">
-        {/* Chat Panel */}
-        <div className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-muted">
-          <AgentChat
-            agentName="Positioning Agent"
-            agentDescription="ICP definition & messaging strategy"
-            placeholder="Describe your target customer, refine positioning, explore messaging angles..."
-            onSend={handleSend}
-            isProcessing={running}
-            messages={messages}
-            onMessagesChange={saveChatMessages}
-            quickActions={quickActions}
-          />
-        </div>
-
-        {/* Insights Panel */}
-        <div className="overflow-hidden rounded-xl border border-edge-subtle bg-surface-muted">
           <InsightPanel
             title="Positioning Versions"
             subtitle={`${versions.length} version${versions.length !== 1 ? "s" : ""} generated`}
@@ -439,7 +306,6 @@ export default function PositioningPage() {
             </div>
           </InsightPanel>
         </div>
-      </div>
     </div>
   );
 }

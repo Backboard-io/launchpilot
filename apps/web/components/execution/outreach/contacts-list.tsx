@@ -59,7 +59,7 @@ export function ContactsList({
   );
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-edge-subtle px-4 py-3">
         <div>
@@ -116,7 +116,7 @@ export function ContactsList({
       )}
 
       {/* Contacts list */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {contacts.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center">
             <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-elevated">

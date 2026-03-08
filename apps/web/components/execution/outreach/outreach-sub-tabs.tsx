@@ -20,7 +20,7 @@ export function OutreachSubTabs({
   pendingCount = 0
 }: OutreachSubTabsProps) {
   return (
-    <div className="flex items-center gap-1 border-b border-edge-subtle px-4">
+    <div className="flex shrink-0 items-center gap-1 border-b border-edge-subtle px-4">
       <button
         onClick={() => onTabChange("contacts")}
         className={cn(

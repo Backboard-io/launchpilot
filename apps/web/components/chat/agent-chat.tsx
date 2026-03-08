@@ -7,15 +7,26 @@ import { createLocalMessageId } from "@/lib/agent-chat";
 import { ChatMessage, Message } from "./chat-message";
 import { ChatInput, ChatInputHandle } from "./chat-input";
 
+interface AgentOption {
+  value: string;
+  label: string;
+}
+
+export interface AgentChatResponse {
+  content: string;
+  agentLabel?: string;
+}
+
 interface AgentChatProps {
   agentName: string;
   agentDescription: string;
   placeholder: string;
-  onSend: (message: string, mode: string) => Promise<string | null>;
+  onSend: (message: string, mode: string, selectedAgent: string) => Promise<string | AgentChatResponse | null>;
   isProcessing: boolean;
   messages: Message[];
   onMessagesChange: (messages: Message[]) => Promise<Message[] | void> | Message[] | void;
   modes?: { value: string; label: string }[];
+  agentOptions?: AgentOption[];
   quickActions?: { label: string; message: string }[];
 }
 
@@ -33,11 +44,20 @@ export function AgentChat({
     { value: "retry", label: "Try again" },
     { value: "extend", label: "Expand" }
   ],
+  agentOptions = [],
   quickActions = []
 }: AgentChatProps) {
   const [mode, setMode] = useState(modes[0]?.value ?? "baseline");
+  const [selectedAgent, setSelectedAgent] = useState(agentOptions[0]?.value ?? "default");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<ChatInputHandle>(null);
+
+  useEffect(() => {
+    if (!agentOptions.length) return;
+    if (!agentOptions.some((option) => option.value === selectedAgent)) {
+      setSelectedAgent(agentOptions[0].value);
+    }
+  }, [agentOptions, selectedAgent]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -51,25 +71,32 @@ export function AgentChat({
         id: createLocalMessageId("user"),
         role: "user",
         content,
-        timestamp: new Date()
+        timestamp: new Date(),
+        metadata: agentOptions.length > 0
+          ? {
+              agentLabel: `To ${agentOptions.find((option) => option.value === selectedAgent)?.label ?? selectedAgent}`
+            }
+          : undefined
       };
       const updatedWithUser = [...messages, userMessage];
       const persistedUserState = await onMessagesChange(updatedWithUser);
       const canonicalMessages = Array.isArray(persistedUserState) ? persistedUserState : updatedWithUser;
 
-      const response = await onSend(content, mode);
+      const response = await onSend(content, mode, selectedAgent);
 
       if (response) {
+        const payload = typeof response === "string" ? { content: response } : response;
         const agentMessage: Message = {
           id: createLocalMessageId("assistant"),
           role: "assistant",
-          content: response,
-          timestamp: new Date()
+          content: payload.content,
+          timestamp: new Date(),
+          metadata: payload.agentLabel ? { agentLabel: payload.agentLabel } : undefined
         };
         await onMessagesChange([...canonicalMessages, agentMessage]);
       }
     },
-    [mode, onSend, messages, onMessagesChange]
+    [agentOptions, mode, onSend, messages, onMessagesChange, selectedAgent]
   );
 
   const handleQuickAction = useCallback((message: string) => {
@@ -94,17 +121,32 @@ export function AgentChat({
             <h3 className="text-sm font-semibold text-fg-primary">{agentName}</h3>
             <p className="text-xs text-fg-muted">{agentDescription}</p>
           </div>
-          <select
-            value={mode}
-            onChange={(e) => setMode(e.target.value)}
-            className="rounded-lg border border-edge-subtle bg-surface-elevated px-3 py-1.5 text-xs font-medium text-fg-secondary outline-none transition-colors hover:border-edge-muted focus:border-accent"
-          >
-            {modes.map((m) => (
-              <option key={m.value} value={m.value}>
-                {m.label}
-              </option>
-            ))}
-          </select>
+          <div className="flex items-center gap-2">
+            {agentOptions.length > 0 && (
+              <select
+                value={selectedAgent}
+                onChange={(e) => setSelectedAgent(e.target.value)}
+                className="rounded-lg border border-edge-subtle bg-surface-elevated px-3 py-1.5 text-xs font-medium text-fg-secondary outline-none transition-colors hover:border-edge-muted focus:border-accent"
+              >
+                {agentOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              className="rounded-lg border border-edge-subtle bg-surface-elevated px-3 py-1.5 text-xs font-medium text-fg-secondary outline-none transition-colors hover:border-edge-muted focus:border-accent"
+            >
+              {modes.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 

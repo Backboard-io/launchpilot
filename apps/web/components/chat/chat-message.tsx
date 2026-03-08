@@ -54,6 +54,15 @@ export function ChatMessage({ message, isLast }: ChatMessageProps) {
       <div
         className={`group relative max-w-[80%] ${isUser ? "items-end" : "items-start"}`}
       >
+        {typeof message.metadata?.agentLabel === "string" && (
+          <div
+            className={`mb-1 text-2xs font-medium uppercase tracking-wide text-fg-faint ${
+              isUser ? "text-right" : "text-left"
+            }`}
+          >
+            {message.metadata.agentLabel}
+          </div>
+        )}
         <div
           className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
             isUser

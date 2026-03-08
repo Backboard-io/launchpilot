@@ -39,7 +39,7 @@ export function EmailPreviewModal({ message, contact, isOpen, onClose }: EmailPr
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-2xl animate-scale-in rounded-xl border border-edge-subtle bg-surface-elevated shadow-2xl">
+      <div className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden animate-scale-in rounded-xl border border-edge-subtle bg-surface-elevated shadow-2xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-edge-subtle p-6">
           <div className="flex items-center gap-4">
@@ -102,7 +102,7 @@ export function EmailPreviewModal({ message, contact, isOpen, onClose }: EmailPr
         )}
 
         {/* Email content */}
-        <div className="p-6">
+        <div className="min-h-0 flex-1 overflow-y-auto p-6">
           {/* Subject */}
           <div className="mb-6">
             <p className="mb-1 text-xs font-medium uppercase tracking-wider text-fg-faint">

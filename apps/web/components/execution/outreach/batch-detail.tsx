@@ -67,7 +67,7 @@ export function BatchDetail({
   }, [batch.id, onSend]);
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       {/* Header */}
       <div className="flex items-start justify-between border-b border-edge-subtle px-6 py-4">
         <div>
@@ -94,12 +94,12 @@ export function BatchDetail({
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-6">
         {/* Inline Action Card for pending batches */}
         {isPending && (
           <ActionCard
             title="Approve Email Batch"
-            description={`This batch contains ${batchMessages.length} personalized emails ready to be sent. Review the emails below and approve to proceed.`}
+            description={`Batch: ${batch.subject_line || `#${batch.id.slice(0, 8)}`}. This batch contains ${batchMessages.length} personalized emails ready to be sent. Review the emails below and approve to proceed.`}
             status="pending"
             onApprove={handleApprove}
             onReject={handleReject}
@@ -162,20 +162,20 @@ export function BatchDetail({
                         : "border-edge-subtle bg-surface-elevated hover:border-edge-muted"
                   )}
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       {/* Avatar */}
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-purple-500 text-sm font-medium text-white">
                         {(contact?.name || contact?.email || "?").charAt(0).toUpperCase()}
                       </div>
 
                       {/* Contact info */}
-                      <div>
-                        <p className="text-sm font-medium text-fg-primary">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-fg-primary">
                           {contact?.name || contact?.email || "Unknown"}
                         </p>
                         {contact?.name && (
-                          <p className="text-xs text-fg-muted">{contact.email}</p>
+                          <p className="truncate text-xs text-fg-muted">{contact.email}</p>
                         )}
                       </div>
                     </div>

@@ -81,12 +81,12 @@ export function ActionCard({
           <p className="mt-1 text-sm text-fg-muted">{description}</p>
 
           {/* Actions */}
-          <div className="mt-4 flex items-center gap-3">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               onClick={onApprove}
               disabled={loading}
               className={cn(
-                "flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:opacity-50",
+                "inline-flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto",
                 isPending
                   ? "bg-amber-500 hover:bg-amber-600"
                   : "bg-accent hover:bg-accent-hover"
@@ -125,7 +125,7 @@ export function ActionCard({
               <button
                 onClick={onReject}
                 disabled={loading}
-                className="flex items-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-red-500/30 px-4 py-2 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path

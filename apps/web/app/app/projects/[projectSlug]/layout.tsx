@@ -3,6 +3,7 @@ import { ReactNode } from "react";
 import Link from "next/link";
 
 import { ProjectFlowNav } from "@/components/project/project-flow-nav";
+import { ProjectGroupChat } from "@/components/project/project-group-chat";
 import { ProjectUtilityTabs } from "@/components/project/project-utility-tabs";
 
 export default async function ProjectLayout({
@@ -54,7 +55,14 @@ export default async function ProjectLayout({
 
       <ProjectUtilityTabs projectSlug={projectSlug} />
 
-      {children}
+      <div className="grid h-[calc(100vh-280px)] min-h-[620px] gap-4 lg:grid-cols-2">
+        <div className="min-w-0 overflow-hidden">
+          <ProjectGroupChat />
+        </div>
+        <div className="min-w-0 overflow-hidden">
+          {children}
+        </div>
+      </div>
     </div>
   );
 }
