@@ -158,11 +158,18 @@ export default function ExecutionPage() {
       let path = "plan/advise";
       let body: Record<string, unknown> = { advice: message, mode };
 
-      if (lowerMessage.includes("asset") || lowerMessage.includes("content") || lowerMessage.includes("copy")) {
+      if (lowerMessage.includes("image ad") || lowerMessage.includes("ad image") || lowerMessage.includes("visual ad")) {
+        action = "assets";
+        path = "image-ad/draft";
+        body = {
+          advice: message,
+          mode
+        };
+      } else if (lowerMessage.includes("asset") || lowerMessage.includes("content") || lowerMessage.includes("copy")) {
         action = "assets";
         path = "assets/advise";
         body = {
-          types: ["landing_copy", "email_copy"],
+          types: ["email_copy"],
           count: 1,
           advice: message,
           mode
@@ -182,7 +189,7 @@ export default function ExecutionPage() {
       setError(null);
 
       try {
-        const data = await apiFetch<{
+        let data = await apiFetch<{
           agent_trace?: Record<string, unknown>;
           chat_message?: string;
           next_step_suggestion?: string;
@@ -197,8 +204,28 @@ export default function ExecutionPage() {
           }
         );
 
+        if (action === "assets" && path === "assets/advise") {
+          await apiFetch(`/projects/${projectId}/execution/image-ad/draft`, {
+            method: "POST",
+            body: JSON.stringify({
+              advice: message,
+              mode
+            })
+          });
+          data = data ?? {
+            chat_message: "Generated email copy and an image ad prompt draft."
+          };
+        }
+
         if (!data) throw new Error(`Failed action: ${action}`);
         await loadState(projectId);
+        if (action === "assets") {
+          setPageState((s) => ({
+            ...s,
+            activeTab: "assets",
+            selectedItemId: null
+          }));
+        }
 
         if (data.chat_message?.trim()) {
           return data.chat_message.trim();
@@ -275,6 +302,39 @@ export default function ExecutionPage() {
     },
     [projectId, loadState]
   );
+
+  const handleDeleteAsset = useCallback(
+    async (assetId: string) => {
+      if (!projectId) return;
+      await apiFetch(`/projects/${projectId}/execution/assets/${assetId}`, {
+        method: "DELETE"
+      });
+      await loadState(projectId);
+      setPageState((s) => ({ ...s, selectedItemId: null }));
+    },
+    [projectId, loadState]
+  );
+
+  const handleGenerateImageAdDraft = useCallback(async () => {
+    if (!projectId) return;
+    setRunningAction("assets");
+    setError(null);
+    try {
+      await apiFetch(`/projects/${projectId}/execution/image-ad/draft`, {
+        method: "POST",
+        body: JSON.stringify({
+          advice: "Create a detailed image ad prompt using all known project context",
+          mode: "deepen"
+        })
+      });
+      await loadState(projectId);
+      setPageState((s) => ({ ...s, activeTab: "assets" }));
+    } catch (draftError) {
+      setError(draftError instanceof Error ? draftError.message : "Failed to generate image ad draft");
+    } finally {
+      setRunningAction(null);
+    }
+  }, [projectId, loadState]);
 
   // Contact handlers
   const handleAddContact = useCallback(
@@ -416,13 +476,13 @@ export default function ExecutionPage() {
     // Offer asset generation
     if (state.assets.length === 0) {
       actions.push({
-        label: "Generate launch assets",
-        message: "Generate landing page copy, email templates, and social posts for the launch"
+        label: "Generate email + image ad prompt",
+        message: "Generate email copy and a detailed image ad generation prompt for this launch"
       });
     } else {
       actions.push({
-        label: "Create more content",
-        message: "Generate additional marketing assets and copy variations"
+        label: "Generate more email + image prompts",
+        message: "Generate additional email copy and image ad prompt variations"
       });
     }
 
@@ -524,6 +584,15 @@ export default function ExecutionPage() {
                 pendingBatches: pendingBatches.length
               }}
             />
+            {pageState.activeTab === "assets" && (
+              <button
+                onClick={handleGenerateImageAdDraft}
+                disabled={runningAction !== null}
+                className="ml-2 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                Generate Image Ad Prompt
+              </button>
+            )}
           </div>
 
           {/* Content Area - List + Detail */}
@@ -652,6 +721,7 @@ export default function ExecutionPage() {
                     asset={selectedAsset}
                     onSave={handleSaveAsset}
                     onStatusChange={handleAssetStatusChange}
+                    onDelete={handleDeleteAsset}
                   />
                 ) : (
                   <EmptyDetailPanel

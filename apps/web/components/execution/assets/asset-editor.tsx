@@ -34,10 +34,7 @@ const assetTypeFields: Record<string, { key: string; label: string; type: "input
     { key: "conclusion", label: "Conclusion", type: "textarea", rows: 4 }
   ],
   image_ad: [
-    { key: "headline", label: "Headline", type: "input" },
-    { key: "body_copy", label: "Body Copy", type: "textarea", rows: 3 },
-    { key: "cta", label: "Call to Action", type: "input" },
-    { key: "image_description", label: "Image Description", type: "textarea", rows: 4 }
+    { key: "generation_prompt", label: "Comprehensive Image Generation Prompt", type: "textarea", rows: 12 }
   ],
   video_script: [
     { key: "title", label: "Title", type: "input" },

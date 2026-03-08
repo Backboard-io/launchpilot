@@ -17,6 +17,15 @@ class AssetGenerationRequest(BaseModel):
     mode: Literal["baseline", "deepen", "retry", "extend"] = "baseline"
 
 
+class ImageAdDraftRequest(BaseModel):
+    advice: str | None = None
+    mode: Literal["baseline", "deepen", "retry", "extend"] = "baseline"
+
+
+class ImageAdRenderRequest(BaseModel):
+    prompt: str | None = None
+
+
 class ContactInput(BaseModel):
     name: str | None = None
     email: EmailStr

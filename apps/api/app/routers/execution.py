@@ -1,19 +1,35 @@
 import json
 from datetime import datetime, timezone
+from urllib.parse import quote_plus
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.agents.execution_agent import run_asset_generation_agent, run_email_personalization_agent, run_execution_plan_agent
+from app.agents.execution_agent import (
+    run_asset_generation_agent,
+    run_email_personalization_agent,
+    run_execution_plan_agent,
+    run_image_ad_prompt_agent,
+)
 from app.agents.shared_context import build_project_context
 from app.db.session import get_db
 from app.integrations.backboard_client import BackboardRequestError
 from app.models.approval import Approval
 from app.models.execution import Asset, Contact, LaunchPlan, LaunchTask, OutboundBatch, OutboundMessage
 from app.routers.utils import success
-from app.schemas.execution import AssetGenerationRequest, AssetUpdateRequest, ContactsUpsertRequest, ContactUpdateRequest, EmailBatchPrepareRequest, ExecutionPlanRequest, TaskUpdateRequest
+from app.schemas.execution import (
+    AssetGenerationRequest,
+    AssetUpdateRequest,
+    ContactsUpsertRequest,
+    ContactUpdateRequest,
+    EmailBatchPrepareRequest,
+    ExecutionPlanRequest,
+    ImageAdDraftRequest,
+    ImageAdRenderRequest,
+    TaskUpdateRequest,
+)
 from app.security.auth0 import CurrentUser
 from app.security.permissions import require_scope
 from app.services.audit_service import AuditService
@@ -110,6 +126,11 @@ def _active_batches(batches: list[OutboundBatch]) -> list[OutboundBatch]:
             current_pending_seen = True
         filtered.append(batch)
     return filtered
+
+
+def _build_image_render_url(prompt: str) -> str:
+    encoded = quote_plus(prompt)
+    return f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=1024&nologo=true&model=flux"
 
 
 @router.post("/plan")
@@ -284,6 +305,114 @@ def advise_assets(
     db: Session = Depends(get_db),
 ):
     return generate_assets(project_id=project_id, payload=payload, _scope=_scope, db=db)
+
+
+@router.post("/image-ad/draft")
+def generate_image_ad_draft(
+    project_id: UUID,
+    payload: ImageAdDraftRequest,
+    _scope: CurrentUser = Depends(require_scope("execution:run")),
+    db: Session = Depends(get_db),
+):
+    ProjectService(db).get_project_or_404(project_id)
+
+    context = build_project_context(db, project_id)
+    try:
+        output, trace = run_image_ad_prompt_agent(
+            context,
+            backboard=BackboardStageService(db),
+            project_id=str(project_id),
+            advice=payload.advice,
+            mode=payload.mode,
+        )
+    except BackboardRequestError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"Backboard image ad prompt failed: {exc}")
+
+    asset = Asset(
+        project_id=project_id,
+        asset_type="image_ad",
+        title=output.get("title") or "Image Ad Draft",
+        content={
+            "generation_prompt": output.get("generation_prompt", ""),
+        },
+        storage_path=None,
+        created_by_agent="execution_agent",
+        status="draft",
+    )
+    db.add(asset)
+    db.flush()
+
+    AuditService(db).log(
+        project_id,
+        "agent",
+        "execution_agent",
+        "execution.image_ad_draft_generated",
+        "asset",
+        None,
+        metadata={"agent_trace": trace, "mode": payload.mode, "advice": payload.advice, "asset_id": str(asset.id)},
+    )
+    db.commit()
+    BackboardProjectStateService(db).sync_after_action(
+        project_id=str(project_id),
+        reason="execution.image_ad_draft",
+        stage="execution",
+        extra={"asset_id": str(asset.id), "mode": payload.mode, "used_advice": bool(payload.advice)},
+    )
+    return success(
+        {
+            "asset": {
+                "id": str(asset.id),
+                "asset_type": asset.asset_type,
+                "status": asset.status,
+                "title": asset.title,
+                "content": asset.content,
+                "storage_path": asset.storage_path,
+            },
+            "agent_trace": trace,
+            "chat_message": output.get("chat_message", ""),
+            "next_step_suggestion": output.get("next_step_suggestion", ""),
+        }
+    )
+
+
+@router.post("/assets/{asset_id}/render-image")
+def render_image_ad_asset(
+    project_id: UUID,
+    asset_id: UUID,
+    payload: ImageAdRenderRequest,
+    _scope: CurrentUser = Depends(require_scope("execution:run")),
+    db: Session = Depends(get_db),
+):
+    ProjectService(db).get_project_or_404(project_id)
+
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.project_id == project_id).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if asset.asset_type != "image_ad":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Asset is not an image ad")
+
+    content = dict(asset.content or {})
+    prompt = (payload.prompt or "").strip() or str(content.get("generation_prompt") or "").strip()
+    if not prompt:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing image generation prompt. Edit the image ad prompt first.",
+        )
+
+    image_url = _build_image_render_url(prompt)
+    content["generation_prompt"] = prompt
+    content["image_url"] = image_url
+    content["generated_at"] = datetime.now(timezone.utc).isoformat()
+    asset.content = content
+    db.commit()
+
+    BackboardProjectStateService(db).sync_after_action(
+        project_id=str(project_id),
+        reason="execution.image_ad_render",
+        stage="execution",
+        extra={"asset_id": str(asset.id)},
+    )
+    return success({"asset_id": str(asset.id), "image_url": image_url, "updated": True})
 
 
 @router.post("/contacts")
@@ -707,6 +836,30 @@ def update_asset(
 
     db.commit()
     return success({"asset_id": str(asset.id), "updated": True})
+
+
+@router.delete("/assets/{asset_id}")
+def delete_asset(
+    project_id: UUID,
+    asset_id: UUID,
+    _scope: CurrentUser = Depends(require_scope("execution:run")),
+    db: Session = Depends(get_db),
+):
+    ProjectService(db).get_project_or_404(project_id)
+
+    asset = db.query(Asset).filter(Asset.id == asset_id, Asset.project_id == project_id).first()
+    if not asset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+
+    db.delete(asset)
+    db.commit()
+    BackboardProjectStateService(db).sync_after_action(
+        project_id=str(project_id),
+        reason="execution.asset_deleted",
+        stage="execution",
+        extra={"asset_id": str(asset_id)},
+    )
+    return success({"asset_id": str(asset_id), "deleted": True})
 
 
 @router.patch("/contacts/{contact_id}")
