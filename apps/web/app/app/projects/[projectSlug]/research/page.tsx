@@ -14,6 +14,7 @@ import {
   InsightSection
 } from "@/components/chat/insight-panel";
 import { apiFetch } from "@/lib/api";
+import { isLocalMessageId, mergeSavedMessages } from "@/lib/agent-chat";
 
 interface ProjectRow {
   id: string;
@@ -61,13 +62,13 @@ export default function ResearchPage() {
 
   const saveChatMessages = useCallback(
     async (newMessages: Message[]) => {
-      if (!projectId) return;
-      // Find messages that don't have a server-generated ID (new ones)
-      const existingIds = new Set(messages.map((m) => m.id));
-      const toSave = newMessages.filter((m) => !existingIds.has(m.id) || m.id.includes("-"));
+      if (!projectId) return newMessages;
+      const toSave = newMessages.filter((m) => isLocalMessageId(m.id));
 
       if (toSave.length > 0) {
-        await apiFetch(`/projects/${projectId}/chat/research`, {
+        const saved = await apiFetch<{ messages: Array<{ id: string; role: string; content: string; timestamp: string }> }>(
+          `/projects/${projectId}/chat/research`,
+          {
           method: "POST",
           body: JSON.stringify({
             messages: toSave.map((m) => ({
@@ -75,11 +76,16 @@ export default function ResearchPage() {
               content: m.content
             }))
           })
-        });
+          }
+        );
+        const merged = mergeSavedMessages(newMessages, saved?.messages ?? []);
+        setMessages(merged);
+        return merged;
       }
       setMessages(newMessages);
+      return newMessages;
     },
-    [projectId, messages]
+    [projectId]
   );
 
   const loadSnapshot = useCallback(async (resolvedProjectId: string) => {

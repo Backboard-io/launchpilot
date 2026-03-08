@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { createLocalMessageId } from "@/lib/agent-chat";
+
 import { ChatMessage, Message } from "./chat-message";
 import { ChatInput, ChatInputHandle } from "./chat-input";
 
@@ -12,7 +14,7 @@ interface AgentChatProps {
   onSend: (message: string, mode: string) => Promise<string | null>;
   isProcessing: boolean;
   messages: Message[];
-  onMessagesChange: (messages: Message[]) => void;
+  onMessagesChange: (messages: Message[]) => Promise<Message[] | void> | Message[] | void;
   modes?: { value: string; label: string }[];
   quickActions?: { label: string; message: string }[];
 }
@@ -46,24 +48,25 @@ export function AgentChat({
   const handleSend = useCallback(
     async (content: string) => {
       const userMessage: Message = {
-        id: crypto.randomUUID(),
+        id: createLocalMessageId("user"),
         role: "user",
         content,
         timestamp: new Date()
       };
       const updatedWithUser = [...messages, userMessage];
-      onMessagesChange(updatedWithUser);
+      const persistedUserState = await onMessagesChange(updatedWithUser);
+      const canonicalMessages = Array.isArray(persistedUserState) ? persistedUserState : updatedWithUser;
 
       const response = await onSend(content, mode);
 
       if (response) {
         const agentMessage: Message = {
-          id: crypto.randomUUID(),
+          id: createLocalMessageId("assistant"),
           role: "assistant",
           content: response,
           timestamp: new Date()
         };
-        onMessagesChange([...updatedWithUser, agentMessage]);
+        await onMessagesChange([...canonicalMessages, agentMessage]);
       }
     },
     [mode, onSend, messages, onMessagesChange]
