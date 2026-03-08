@@ -20,7 +20,7 @@ import {
   OutboundBatch,
   OutboundMessage
 } from "@/components/execution/outreach";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchWithError } from "@/lib/api";
 import { isLocalMessageId, mergeSavedMessages } from "@/lib/agent-chat";
 
 interface ProjectRow {
@@ -375,6 +375,25 @@ export default function ExecutionPage() {
       setPageState((s) => ({ ...s, selectedItemId: null }));
     },
     [projectId, loadState]
+  );
+
+  const handleSaveAssetToDrive = useCallback(
+    async (asset: Asset) => {
+      if (!projectId) return;
+      setError(null);
+      const payload = buildDrivePayloadFromAsset(asset);
+      const response = await apiFetchWithError<{ written: boolean; file: { id?: string | null; name?: string | null } }>(
+        `/projects/${projectId}/execution/drive/write`,
+        {
+          method: "POST",
+          body: JSON.stringify(payload)
+        }
+      );
+      if (!response.data) {
+        setError(response.error?.message ?? "Failed to save asset to Google Drive. Check your Google connection in Settings and try again.");
+      }
+    },
+    [projectId]
   );
 
   // Contact handlers
@@ -763,6 +782,7 @@ export default function ExecutionPage() {
                         onSave={handleSaveAsset}
                         onStatusChange={handleAssetStatusChange}
                         onDelete={handleDeleteAsset}
+                        onSaveToDrive={handleSaveAssetToDrive}
                       />
                     ) : (
                       <EmptyDetailPanel
@@ -813,6 +833,40 @@ export default function ExecutionPage() {
       />
     </div>
   );
+}
+
+function buildDrivePayloadFromAsset(asset: Asset): { title: string; content: string; mime_type: string } {
+  const readableTitle = asset.title || asset.asset_type.replace(/_/g, " ");
+  const baseName = readableTitle.trim().replace(/[\\/:*?"<>|]+/g, "_");
+  const safeTitle = baseName.length > 0 ? baseName : "generated-asset";
+  const sections: string[] = [
+    `# ${readableTitle}`,
+    `Type: ${asset.asset_type}`,
+    `Status: ${asset.status}`
+  ];
+
+  const content = asset.content ?? {};
+  if (Object.keys(content).length === 0) {
+    sections.push("\nNo generated content.");
+  } else {
+    for (const [key, value] of Object.entries(content)) {
+      const label = key.replace(/_/g, " ");
+      sections.push(`\n## ${label}\n${serializeAssetValue(value)}`);
+    }
+  }
+
+  return {
+    title: `${safeTitle}.md`,
+    content: sections.join("\n"),
+    mime_type: "text/markdown"
+  };
+}
+
+function serializeAssetValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (value === null || value === undefined) return "";
+  return JSON.stringify(value, null, 2);
 }
 
 function EmptyDetailPanel({

@@ -64,6 +64,8 @@ def google_link_url(
     link_url = (
         f"{app_url}/auth/login?connection=google-oauth2"
         f"&connection_scope={drive_scope}"
+        f"&prompt=consent"
+        f"&access_type=offline"
         f"&returnTo={return_to}"
     )
     return success({"url": link_url})

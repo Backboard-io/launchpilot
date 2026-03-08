@@ -24,11 +24,13 @@ interface AssetDetailProps {
   onSave: (assetId: string, updates: Partial<Asset>) => Promise<void>;
   onStatusChange: (assetId: string, status: string) => Promise<void>;
   onDelete: (assetId: string) => Promise<void>;
+  onSaveToDrive: (asset: Asset) => Promise<void>;
 }
 
-export function AssetDetail({ asset, onSave, onStatusChange, onDelete }: AssetDetailProps) {
+export function AssetDetail({ asset, onSave, onStatusChange, onDelete, onSaveToDrive }: AssetDetailProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingToDrive, setSavingToDrive] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleSave = useCallback(
@@ -61,6 +63,15 @@ export function AssetDetail({ asset, onSave, onStatusChange, onDelete }: AssetDe
       setSaving(false);
     }
   }, [asset.id, onStatusChange]);
+
+  const handleSaveToDrive = useCallback(async () => {
+    setSavingToDrive(true);
+    try {
+      await onSaveToDrive(asset);
+    } finally {
+      setSavingToDrive(false);
+    }
+  }, [asset, onSaveToDrive]);
 
   return (
     <div className="flex h-full flex-col">
@@ -108,6 +119,13 @@ export function AssetDetail({ asset, onSave, onStatusChange, onDelete }: AssetDe
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
                 Edit
+              </button>
+              <button
+                onClick={handleSaveToDrive}
+                disabled={savingToDrive}
+                className="flex items-center gap-2 rounded-lg border border-edge-subtle px-4 py-2 text-sm font-medium text-fg-secondary transition-colors hover:bg-surface-elevated disabled:opacity-50"
+              >
+                {savingToDrive ? "Saving..." : "Save to Drive"}
               </button>
               <button
                 onClick={() => setShowDeleteConfirm(true)}

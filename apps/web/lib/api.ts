@@ -6,6 +6,29 @@ export interface ApiErrorPayload {
   message: string;
 }
 
+function parseErrorPayload(payload: unknown): ApiErrorPayload | null {
+  if (!payload || typeof payload !== "object") return null;
+  const obj = payload as Record<string, unknown>;
+  const error = obj.error;
+  if (error && typeof error === "object") {
+    const errObj = error as Record<string, unknown>;
+    const message = typeof errObj.message === "string" ? errObj.message : null;
+    const code = typeof errObj.code === "string" ? errObj.code : "REQUEST_FAILED";
+    if (message) return { code, message };
+  }
+  const detail = obj.detail;
+  if (detail && typeof detail === "object") {
+    const detailObj = detail as Record<string, unknown>;
+    const message = typeof detailObj.message === "string" ? detailObj.message : null;
+    const code = typeof detailObj.code === "string" ? detailObj.code : "REQUEST_FAILED";
+    if (message) return { code, message };
+  }
+  if (typeof obj.detail === "string") {
+    return { code: "REQUEST_FAILED", message: obj.detail };
+  }
+  return null;
+}
+
 // Client-side token fetch
 async function getClientAccessToken(): Promise<string | null> {
   if (typeof window === "undefined") {
@@ -94,7 +117,7 @@ export async function apiFetchWithError<T>(
     const payload = await response.json().catch(() => null);
 
     if (!response.ok) {
-      const error = payload?.error as ApiErrorPayload | undefined;
+      const error = parseErrorPayload(payload);
       return { data: null, error: error ?? null, status };
     }
 

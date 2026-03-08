@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote_plus
 from uuid import UUID
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -36,7 +37,7 @@ from app.schemas.execution import (
     ImageAdRenderRequest,
     TaskUpdateRequest,
 )
-from app.security.auth0 import CurrentUser
+from app.security.auth0 import CurrentUser, get_current_user
 from app.security.permissions import require_scope
 from app.services.audit_service import AuditService
 from app.services.backboard_project_state_service import BackboardProjectStateService
@@ -1091,13 +1092,42 @@ def write_to_google_drive(
         )
 
     folder_id = payload.folder_id or None
-    file_info = GoogleDriveClient().create_text_file(
-        access_token=access_token,
-        title=payload.title.strip(),
-        content=payload.content,
-        mime_type=payload.mime_type or "text/plain",
-        folder_id=folder_id,
-    )
+    try:
+        file_info = GoogleDriveClient().create_text_file(
+            access_token=access_token,
+            title=payload.title.strip(),
+            content=payload.content,
+            mime_type=payload.mime_type or "text/plain",
+            folder_id=folder_id,
+        )
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code
+        error_message = "Failed to write file to Google Drive."
+        try:
+            body = exc.response.json()
+            details = body.get("error", {}) if isinstance(body, dict) else {}
+            message = details.get("message")
+            if message:
+                error_message = str(message)
+        except Exception:  # noqa: BLE001
+            pass
+
+        if status_code in {401, 403}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "GOOGLE_TOKEN_INVALID",
+                    "message": "Google access token is expired or missing Drive permission. Reconnect Google in Settings and try again.",
+                },
+            ) from exc
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "code": "GOOGLE_DRIVE_WRITE_FAILED",
+                "message": error_message,
+            },
+        ) from exc
 
     AuditService(db).log(
         project_id,
