@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.db.session import get_db
 from app.integrations.auth0_github_connector import Auth0GithubConnector
+from app.integrations.auth0_google_connector import Auth0GoogleConnector
 from app.integrations.github_client import GitHubClient
 from app.routers.utils import success
 from app.security.auth0 import CurrentUser, get_current_user
@@ -38,6 +39,33 @@ def github_link_url(
     app_url = settings.web_app_url.rstrip("/")
     # This uses the existing Auth0 route handler in the web app.
     link_url = f"{app_url}/auth/login?connection=github&returnTo={quote('/app/settings/security', safe='')}"
+    return success({"url": link_url})
+
+
+@router.get("/connectors/google/status")
+def google_status(
+    current_user: CurrentUser = Depends(get_current_user),
+    _scope: CurrentUser = Depends(require_scope("connector:link")),
+):
+    connector = Auth0GoogleConnector()
+    status_payload = connector.google_status(current_user.sub)
+    return success(status_payload)
+
+
+@router.get("/connectors/google/link-url")
+def google_link_url(
+    _current_user: CurrentUser = Depends(get_current_user),
+    _scope: CurrentUser = Depends(require_scope("connector:link")),
+):
+    settings = get_settings()
+    app_url = settings.web_app_url.rstrip("/")
+    return_to = quote("/app/settings/security", safe="")
+    drive_scope = quote("https://www.googleapis.com/auth/drive.file", safe="")
+    link_url = (
+        f"{app_url}/auth/login?connection=google-oauth2"
+        f"&connection_scope={drive_scope}"
+        f"&returnTo={return_to}"
+    )
     return success({"url": link_url})
 
 

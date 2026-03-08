@@ -16,7 +16,9 @@ from app.agents.execution_agent import (
 )
 from app.agents.shared_context import build_project_context
 from app.db.session import get_db
+from app.integrations.auth0_google_connector import Auth0GoogleConnector
 from app.integrations.backboard_client import BackboardRequestError
+from app.integrations.google_drive_client import GoogleDriveClient
 from app.models.approval import Approval
 from app.models.chat import AgentChatMessage
 from app.models.execution import Asset, Contact, LaunchPlan, LaunchTask, OutboundBatch, OutboundMessage
@@ -26,6 +28,7 @@ from app.schemas.execution import (
     AssetUpdateRequest,
     ContactsUpsertRequest,
     ContactUpdateRequest,
+    DriveWriteRequest,
     DistributionAssetsRequest,
     EmailBatchPrepareRequest,
     ExecutionPlanRequest,
@@ -1064,3 +1067,56 @@ def delete_contact(
     db.delete(contact)
     db.commit()
     return success({"contact_id": str(contact_id), "deleted": True})
+
+
+@router.post("/drive/write")
+def write_to_google_drive(
+    project_id: UUID,
+    payload: DriveWriteRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    _run_scope: CurrentUser = Depends(require_scope("execution:run")),
+    db: Session = Depends(get_db),
+):
+    ProjectService(db).get_project_or_404(project_id)
+
+    connector = Auth0GoogleConnector()
+    access_token = connector.google_access_token(current_user.sub)
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "GOOGLE_NOT_LINKED",
+                "message": "Google account is not linked or delegated token is unavailable.",
+            },
+        )
+
+    folder_id = payload.folder_id or None
+    file_info = GoogleDriveClient().create_text_file(
+        access_token=access_token,
+        title=payload.title.strip(),
+        content=payload.content,
+        mime_type=payload.mime_type or "text/plain",
+        folder_id=folder_id,
+    )
+
+    AuditService(db).log(
+        project_id,
+        "system",
+        "google_drive_connector",
+        "execution.google_drive_write",
+        "external_file",
+        str(file_info.get("id") or ""),
+        metadata={
+            "file_name": file_info.get("name"),
+            "mime_type": file_info.get("mimeType"),
+            "folder_id": folder_id,
+        },
+    )
+    db.commit()
+    BackboardProjectStateService(db).sync_after_action(
+        project_id=str(project_id),
+        reason="execution.google_drive_write",
+        stage="execution",
+        extra={"file_id": file_info.get("id"), "file_name": file_info.get("name")},
+    )
+    return success({"written": True, "file": file_info})

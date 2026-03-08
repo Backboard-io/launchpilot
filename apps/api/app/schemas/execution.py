@@ -77,3 +77,10 @@ class DistributionAssetsRequest(BaseModel):
     variations_per_channel: int = 3
     advice: str | None = None
     mode: Literal["baseline", "deepen", "retry", "extend"] = "baseline"
+
+
+class DriveWriteRequest(BaseModel):
+    title: str
+    content: str
+    mime_type: str = "text/plain"
+    folder_id: str | None = None

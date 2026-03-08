@@ -75,6 +75,7 @@ def _dev_user() -> CurrentUser:
             "connector:link",
             "repo:read",
             "repo:write",
+            "drive:write",
         },
         allowed_actions=["approve_send", "publish_asset"],
         raw_claims={},

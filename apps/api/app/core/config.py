@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     auth0_m2m_client_id: str | None = None
     auth0_m2m_client_secret: str | None = None
     auth0_management_audience: str | None = None
+    google_drive_default_folder_id: str | None = None
 
     supabase_db_url: str = Field(default="postgresql+psycopg://postgres:postgres@localhost:5432/postgres")
 

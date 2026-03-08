@@ -14,16 +14,33 @@ interface GitHubLinkPayload {
   url: string;
 }
 
+interface GoogleStatusPayload {
+  linked: boolean;
+  provider: string;
+  provider_user_id: string | null;
+  has_access_token: boolean;
+}
+
+interface GoogleLinkPayload {
+  url: string;
+}
+
 export default async function SecurityCenterPage() {
   const githubStatus = await serverApiFetch<GitHubStatusPayload>("/connectors/github/status");
   const githubLink = await serverApiFetch<GitHubLinkPayload>("/connectors/github/link-url");
+  const googleStatus = await serverApiFetch<GoogleStatusPayload>("/connectors/google/status");
+  const googleLink = await serverApiFetch<GoogleLinkPayload>("/connectors/google/link-url");
   const linkedAccounts = [
     {
       provider: "GitHub",
       status: githubStatus?.linked ? "linked" : "not linked",
       detail: githubStatus?.has_access_token ? "token available" : "token unavailable",
     },
-    { provider: "Google", status: "linked", icon: "google" },
+    {
+      provider: "Google",
+      status: googleStatus?.linked ? "linked" : "not linked",
+      detail: googleStatus?.has_access_token ? "token available" : "token unavailable",
+    },
     { provider: "Passkey", status: "enrolled", icon: "key" }
   ];
 
@@ -133,6 +150,23 @@ export default async function SecurityCenterPage() {
                 className="inline-flex items-center rounded-md bg-accent px-3 py-2 text-xs font-medium text-white"
               >
                 {githubStatus?.linked ? "Reconnect GitHub" : "Connect GitHub"}
+              </Link>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-lg border border-edge-subtle bg-surface-elevated p-3">
+            <p className="text-xs text-fg-faint">Google Drive Connector</p>
+            <p className="mt-1 text-sm text-fg-secondary">
+              {googleStatus?.linked
+                ? "Google is linked. Execution can write files to your Drive."
+                : "Google is not linked for this account yet."}
+            </p>
+            <div className="mt-3">
+              <Link
+                href={googleLink?.url ?? "/auth/login?connection=google-oauth2"}
+                className="inline-flex items-center rounded-md bg-accent px-3 py-2 text-xs font-medium text-white"
+              >
+                {googleStatus?.linked ? "Reconnect Google" : "Connect Google"}
               </Link>
             </div>
           </div>
