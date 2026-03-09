@@ -2548,3 +2548,134 @@ The central architecture choice is:
 
 That combination is the smallest architecture that still looks serious, agentic, and product complete.
 
+# Deploy LaunchPilot (Vercel + Render)
+
+This guide deploys:
+- `apps/api` to Render (Docker web service)
+- `apps/web` to Vercel (Next.js app)
+
+## 1. Prerequisites
+
+- Repo pushed to GitHub
+- Backboard API key
+- Auth0 config (if using `AUTH_MODE=auth0`)
+- Optional Resend key (for real email sends)
+
+## 2. Deploy API on Render
+
+### Option A: Blueprint (recommended)
+
+1. In Render, click `New` -> `Blueprint`.
+2. Select this repo.
+3. Render will detect [`render.yaml`](/Users/akamel/Code/launchpilot/render.yaml).
+4. Click `Apply`.
+
+This creates:
+- Postgres database: `launchpilot-db`
+- Web service: `launchpilot-api` using [`apps/api/Dockerfile`](/Users/akamel/Code/launchpilot/apps/api/Dockerfile)
+
+### Option B: Manual service setup
+
+1. `New` -> `PostgreSQL` (create DB).
+2. `New` -> `Web Service` (connect repo).
+3. Use:
+   - Runtime: `Docker`
+   - Dockerfile path: `apps/api/Dockerfile`
+   - Docker context: repo root (`.`)
+   - Health check path: `/v1/health`
+
+### Required API environment variables
+
+Set these on Render service:
+
+- `SUPABASE_DB_URL`
+- `WEB_APP_URL`
+- `AUTH_MODE`
+- `BACKBOARD_API_KEY`
+
+Important for `SUPABASE_DB_URL`:
+- Use a SQLAlchemy URL with psycopg driver:
+- `postgresql+psycopg://USER:PASSWORD@HOST:PORT/DBNAME`
+- If you copy Render's default DB URL, replace scheme with `postgresql+psycopg://`.
+
+Recommended defaults:
+
+- `AUTH_MODE=dev` (fastest path)
+- `BACKBOARD_BASE_URL=https://app.backboard.io/api`
+- `BACKBOARD_LLM_PROVIDER=openai`
+- `BACKBOARD_MODEL_NAME=gpt-4o`
+- `BACKBOARD_MEMORY_MODE=On`
+- `RESEND_FROM_EMAIL=noreply@growthlaunchpad.app`
+
+Optional:
+- `RESEND_API_KEY` (if omitted, send path stays mock mode)
+
+If `AUTH_MODE=auth0`, also set:
+- `AUTH0_ISSUER`
+- `AUTH0_AUDIENCE`
+- `APP_JWT_NAMESPACE` (default: `https://growthlaunchpad.app`)
+- `AUTH0_DOMAIN`
+- `AUTH0_M2M_CLIENT_ID`
+- `AUTH0_M2M_CLIENT_SECRET`
+- `AUTH0_MANAGEMENT_AUDIENCE`
+
+### Render runtime behavior
+
+Container startup command (in Dockerfile):
+- `alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+
+So migrations run automatically on each deploy/start.
+
+## 3. Deploy Web on Vercel
+
+1. In Vercel, click `Add New` -> `Project`.
+2. Import this repo.
+3. Set **Root Directory** to `apps/web`.
+4. Deploy.
+
+### Required web environment variables
+
+- `NEXT_PUBLIC_API_BASE_URL=https://<your-render-api-domain>/v1`
+- `API_BASE_URL=https://<your-render-api-domain>/v1`
+- `NEXT_PUBLIC_APP_URL=https://<your-vercel-domain>`
+
+If using Auth0 on web, also set:
+- `APP_BASE_URL=https://<your-vercel-domain>`
+- `AUTH0_SECRET`
+- `AUTH0_DOMAIN`
+- `AUTH0_CLIENT_ID`
+- `AUTH0_CLIENT_SECRET`
+- `AUTH0_AUDIENCE` (must match API audience)
+- Optional: `AUTH0_SCOPE`
+
+## 4. Auth0 settings (only for `AUTH_MODE=auth0`)
+
+Configure your Auth0 Application:
+- Allowed Callback URLs:
+  - `https://<your-vercel-domain>/auth/callback`
+- Allowed Logout URLs:
+  - `https://<your-vercel-domain>`
+- Allowed Web Origins:
+  - `https://<your-vercel-domain>`
+
+Make sure API and web use matching `AUTH0_AUDIENCE` and issuer.
+
+## 5. Final wiring checklist
+
+1. Render API is healthy:
+   - `GET https://<render-api>/v1/health` returns OK.
+2. Render `WEB_APP_URL` exactly matches your Vercel origin.
+3. Vercel `NEXT_PUBLIC_API_BASE_URL` points to Render `/v1`.
+4. Re-deploy both services after env updates.
+
+## 6. Smoke test flow
+
+1. Open Vercel app.
+2. Create project.
+3. Run research.
+4. Run positioning.
+5. Run execution plan/assets.
+6. Prepare outreach batch.
+7. Approve and send.
+
+If no `RESEND_API_KEY` is configured, send will run in mock mode by design.
