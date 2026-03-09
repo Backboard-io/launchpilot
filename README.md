@@ -1,6 +1,6 @@
-# Growth Launchpad
+# LaunchPilot
 
-Growth Launchpad is a hackathon-focused MVP for supervised, multi-agent product launches.
+LaunchPilot is a hackathon-focused MVP for supervised, multi-agent product launches.
 
 This repo is intentionally streamlined for a 36-hour delivery window:
 - Next.js frontend (`apps/web`)
