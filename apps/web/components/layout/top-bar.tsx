@@ -51,7 +51,7 @@ export function TopBar() {
         >
           New Project
         </Link>
-        <Link
+        {/* <Link
           href="/app/settings/security"
           className={cn(
             "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
@@ -69,7 +69,7 @@ export function TopBar() {
             />
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
-        </Link>
+        </Link> */}
         <div className="ml-1 h-4 w-px bg-edge-subtle" />
         <ThemeToggle />
         <div className="h-4 w-px bg-edge-subtle" />

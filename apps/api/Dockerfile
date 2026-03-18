@@ -33,4 +33,4 @@ cp -r /app/web/.next/static /app/web/.next/standalone/.next/static
 # CMD ["uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "&&", "npm", "run", "dev"]
 WORKDIR /app
 
-CMD ["sh", "-c", "cd /app && DB_PATH=${SQLITE_DB_PATH:-/tmp/data/launchpilot.db} && mkdir -p \"$(dirname \"$DB_PATH\")\" && alembic upgrade head && litestream replicate -config /app/litestream.yml & uvicorn app.main:app --host 127.0.0.1 --port 9000 & sleep 5 && cd /app/web && NODE_ENV=production HOSTNAME=${HOSTNAME:-0.0.0.0} exec node .next/standalone/server.js"]
+CMD ["sh", "-c", "cd /app && export DB_PATH=${SQLITE_DB_PATH:-/tmp/data/launchpilot.db} && export SQLITE_DB_PATH=${SQLITE_DB_PATH:-$DB_PATH} && mkdir -p \"$(dirname \"$DB_PATH\")\" && (litestream restore -config /app/litestream.yml -o \"$DB_PATH\" -if-replica-exists \"$DB_PATH\" || true) && alembic upgrade head && litestream replicate -config /app/litestream.yml & uvicorn app.main:app --host 127.0.0.1 --port 9000 & sleep 5 && cd /app/web && NODE_ENV=production HOSTNAME=${HOSTNAME:-0.0.0.0} exec node .next/standalone/server.js"]

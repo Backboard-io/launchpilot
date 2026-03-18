@@ -3,6 +3,10 @@ import Link from "next/link";
 import { StatCard } from "@/components/ui/stat-card";
 import { serverApiFetch } from "@/lib/api";
 
+interface MePayload {
+  auth_provider?: string | null;
+}
+
 interface GitHubStatusPayload {
   linked: boolean;
   provider: string;
@@ -29,20 +33,26 @@ const githubFallbackLink = "/auth/signin/github?callbackUrl=%2Fapp%2Fsettings%2F
 const googleFallbackLink = "/auth/signin/google?callbackUrl=%2Fapp%2Fsettings%2Fsecurity";
 
 export default async function SecurityCenterPage() {
-  const githubStatus = await serverApiFetch<GitHubStatusPayload>("/connectors/github/status");
-  const githubLink = await serverApiFetch<GitHubLinkPayload>("/connectors/github/link-url");
-  const googleStatus = await serverApiFetch<GoogleStatusPayload>("/connectors/google/status");
-  const googleLink = await serverApiFetch<GoogleLinkPayload>("/connectors/google/link-url");
+  const [me, githubStatus, githubLink, googleStatus, googleLink] = await Promise.all([
+    serverApiFetch<MePayload>("/me"),
+    serverApiFetch<GitHubStatusPayload>("/connectors/github/status"),
+    serverApiFetch<GitHubLinkPayload>("/connectors/github/link-url"),
+    serverApiFetch<GoogleStatusPayload>("/connectors/google/status"),
+    serverApiFetch<GoogleLinkPayload>("/connectors/google/link-url"),
+  ]);
+  const authProvider = me?.auth_provider ?? null;
+  const githubLinked = githubStatus?.linked ?? authProvider === "github";
+  const googleLinked = googleStatus?.linked ?? authProvider === "google";
   const linkedAccounts = [
     {
       provider: "GitHub",
-      status: githubStatus?.linked ? "linked" : "not linked",
-      detail: githubStatus?.has_access_token ? "token available" : "token unavailable",
+      status: githubLinked ? "linked" : "not linked",
+      detail: githubStatus?.has_access_token ? "token available" : authProvider === "github" ? "signed in" : "token unavailable",
     },
     {
       provider: "Google",
-      status: googleStatus?.linked ? "linked" : "not linked",
-      detail: googleStatus?.has_access_token ? "token available" : "token unavailable",
+      status: googleLinked ? "linked" : "not linked",
+      detail: googleStatus?.has_access_token ? "token available" : authProvider === "google" ? "signed in" : "token unavailable",
     },
   ];
 
@@ -132,7 +142,13 @@ export default async function SecurityCenterPage() {
                   ) : null}
                 </div>
                 <div className="text-right">
-                  <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400">
+                  <span
+                    className={
+                      account.status === "linked"
+                        ? "rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400"
+                        : "rounded-full bg-fg-faint/10 px-2 py-0.5 text-xs font-medium text-fg-faint"
+                    }
+                  >
                     {account.status}
                   </span>
                 </div>
@@ -140,15 +156,18 @@ export default async function SecurityCenterPage() {
             ))}
           </ul>
           <div className="mt-4 rounded-lg border border-edge-subtle bg-surface-elevated p-3">
-            <p className="text-xs text-fg-faint">GitHub Connector</p>
+            <p className="text-xs text-fg-faint">GitHub</p>
             <p className="mt-1 text-sm text-fg-secondary">
               {githubStatus?.linked
                 ? "GitHub is linked. You can fetch repository context in project workflows."
-                : "GitHub is not linked for this account yet."}
+                : authProvider === "github"
+                  ? "You signed in with GitHub. Link again to grant repo access for workflows."
+                  : "GitHub is not linked for this account yet."}
             </p>
             <div className="mt-3">
               <Link
-                href={githubLink?.url ?? githubFallbackLink}
+                href={githubStatus?.linked ? (githubLink?.url ?? githubFallbackLink) : githubFallbackLink}
+                prefetch={false}
                 className="inline-flex items-center rounded-md bg-accent px-3 py-2 text-xs font-medium text-white"
               >
                 {githubStatus?.linked ? "Reconnect GitHub" : "Connect GitHub"}
@@ -157,15 +176,18 @@ export default async function SecurityCenterPage() {
           </div>
 
           <div className="mt-4 rounded-lg border border-edge-subtle bg-surface-elevated p-3">
-            <p className="text-xs text-fg-faint">Google Drive Connector</p>
+            <p className="text-xs text-fg-faint">Google</p>
             <p className="mt-1 text-sm text-fg-secondary">
               {googleStatus?.linked
                 ? "Google is linked. Execution can write files to your Drive."
-                : "Google is not linked for this account yet."}
+                : authProvider === "google"
+                  ? "You signed in with Google. Link again to grant Drive access for execution."
+                  : "Google is not linked for this account yet."}
             </p>
             <div className="mt-3">
               <Link
-                href={googleLink?.url ?? googleFallbackLink}
+                href={googleStatus?.linked ? (googleLink?.url ?? googleFallbackLink) : googleFallbackLink}
+                prefetch={false}
                 className="inline-flex items-center rounded-md bg-accent px-3 py-2 text-xs font-medium text-white"
               >
                 {googleStatus?.linked ? "Reconnect Google" : "Connect Google"}

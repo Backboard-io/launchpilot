@@ -15,12 +15,7 @@ export function isAuthEnabled(): boolean {
 }
 
 export function getAuthConfigError(): string | null {
-  if (!secret) {
-    return "AUTH_SECRET is required. Add it to apps/web/.env.local and restart.";
-  }
-  if (!hasProviders) {
-    return "At least one OAuth provider is required: set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or GITHUB_ID and GITHUB_SECRET.";
-  }
+
   return null;
 }
 

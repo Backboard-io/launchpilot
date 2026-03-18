@@ -29,12 +29,18 @@ def get_me(current_user: CurrentUser = Depends(get_current_user), db: Session = 
     admin_emails_set = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
     is_admin = (current_user.email or "").lower() in admin_emails_set
 
+    # Auth provider from JWT sub (format "provider|provider_account_id" from NextAuth)
+    auth_provider = None
+    if current_user.sub and "|" in current_user.sub:
+        auth_provider = current_user.sub.split("|", 1)[0].lower()
+
     return success(
         {
             "id": str(user.id),
             "sub": current_user.sub,
             "email": current_user.email,
             "name": current_user.name,
+            "auth_provider": auth_provider,
             "is_admin": is_admin,
             "scopes": sorted(current_user.scopes),
             "default_workspace": {
