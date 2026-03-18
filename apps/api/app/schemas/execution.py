@@ -50,12 +50,19 @@ class EmailBatchSendResponse(BaseModel):
     status: str
 
 
+TASK_CATEGORIES = ("infra", "coding", "text_social", "video_social")
+
+
 class TaskUpdateRequest(BaseModel):
     title: str | None = None
     description: str | None = None
     day_number: int | None = None
     priority: int | None = None
     status: str | None = None
+    evidence_url: str | None = None
+    evidence_verified: bool | None = None  # true = set verified now, false = clear
+    category: str | None = None  # infra | coding | text_social | video_social
+    assignee_id: str | None = None  # user id or empty to unassign
 
 
 class AssetUpdateRequest(BaseModel):

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   DetailDrawer,
@@ -10,13 +10,15 @@ import {
   DrawerSelect,
   DrawerTextarea
 } from "@/components/ui/detail-drawer";
-import { Task } from "./plan-view";
+import { Task, TaskCategory, TASK_CATEGORY_OPTIONS } from "./plan-view";
+
+type TaskUpdates = Partial<Task> & { evidence_verified?: boolean };
 
 interface TaskDrawerProps {
   task: Task | null;
   isOpen: boolean;
   onClose: () => void;
-  onSave: (taskId: string, updates: Partial<Task>) => Promise<void>;
+  onSave: (taskId: string, updates: TaskUpdates) => Promise<void>;
   onToggleComplete: (taskId: string) => Promise<void>;
 }
 
@@ -25,7 +27,11 @@ export function TaskDrawer({ task, isOpen, onClose, onSave, onToggleComplete }: 
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState<number>(3);
   const [dayNumber, setDayNumber] = useState<number>(1);
+  const [evidenceUrl, setEvidenceUrl] = useState("");
+  const [category, setCategory] = useState<TaskCategory | "">("");
   const [saving, setSaving] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const togglingRef = useRef(false);
 
   useEffect(() => {
     if (task) {
@@ -33,37 +39,57 @@ export function TaskDrawer({ task, isOpen, onClose, onSave, onToggleComplete }: 
       setDescription(task.description || "");
       setPriority(task.priority || 3);
       setDayNumber(task.day_number || 1);
+      setEvidenceUrl(task.evidence_url ?? "");
+      setCategory((task.category as TaskCategory) ?? "");
     }
   }, [task]);
 
   const handleSave = useCallback(async () => {
     if (!task) return;
 
+    const trimmedUrl = evidenceUrl.trim();
     setSaving(true);
     try {
       await onSave(task.id, {
         title,
         description: description || undefined,
         priority,
-        day_number: dayNumber
+        day_number: dayNumber,
+        evidence_url: trimmedUrl || undefined,
+        evidence_verified: trimmedUrl.length > 0 ? true : undefined,
+        category: category || undefined
       });
       onClose();
     } finally {
       setSaving(false);
     }
-  }, [task, title, description, priority, dayNumber, onSave, onClose]);
+  }, [task, title, description, priority, dayNumber, evidenceUrl, category, onSave, onClose]);
 
   const handleToggle = useCallback(async () => {
-    if (!task) return;
+    if (!task || togglingRef.current) return;
+    togglingRef.current = true;
     setSaving(true);
     try {
       await onToggleComplete(task.id);
     } finally {
+      togglingRef.current = false;
       setSaving(false);
     }
   }, [task, onToggleComplete]);
 
+  const handleVerifyUrl = useCallback(async () => {
+    if (!task || !evidenceUrl.trim()) return;
+    setVerifying(true);
+    try {
+      await onSave(task.id, { evidence_url: evidenceUrl.trim(), evidence_verified: true });
+    } finally {
+      setVerifying(false);
+    }
+  }, [task, evidenceUrl, onSave]);
+
   const isCompleted = task?.status === "completed" || task?.status === "succeeded";
+  const isVerified = Boolean(task?.evidence_verified_at);
+  const canVerify = evidenceUrl.trim().length > 0 && !isVerified;
 
   return (
     <DetailDrawer
@@ -171,6 +197,52 @@ export function TaskDrawer({ task, isOpen, onClose, onSave, onToggleComplete }: 
             </DrawerSelect>
           </DrawerField>
         </div>
+
+        {/* Evidence link (quick verify on save, or explicit Verify URL) */}
+        <DrawerField label="Evidence link">
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <DrawerInput
+                value={evidenceUrl}
+                onChange={(e) => setEvidenceUrl(e.target.value)}
+                placeholder="https://..."
+                type="url"
+                className="min-w-0 flex-1"
+              />
+              <DrawerButton
+                variant="secondary"
+                onClick={handleVerifyUrl}
+                disabled={!canVerify}
+                loading={verifying}
+              >
+                Verify URL
+              </DrawerButton>
+            </div>
+            {isVerified && (
+              <p className="flex items-center gap-1.5 text-xs text-emerald-400">
+                <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Verified
+              </p>
+            )}
+          </div>
+        </DrawerField>
+
+        {/* Category (gamification points) */}
+        <DrawerField label="Category">
+          <DrawerSelect
+            value={category}
+            onChange={(e) => setCategory(e.target.value as TaskCategory | "")}
+          >
+            <option value="">—</option>
+            {TASK_CATEGORY_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </DrawerSelect>
+        </DrawerField>
       </div>
     </DetailDrawer>
   );

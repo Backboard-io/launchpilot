@@ -25,9 +25,8 @@ interface GoogleLinkPayload {
   url: string;
 }
 
-const githubFallbackLink = "/auth/login?connection=github&connection_scope=repo%2Cuser%3Aemail&returnTo=%2Fapp%2Fsettings%2Fsecurity";
-const googleFallbackLink =
-  "/auth/login?connection=google-oauth2&connection_scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.file&prompt=consent&access_type=offline&returnTo=%2Fapp%2Fsettings%2Fsecurity";
+const githubFallbackLink = "/auth/signin/github?callbackUrl=%2Fapp%2Fsettings%2Fsecurity";
+const googleFallbackLink = "/auth/signin/google?callbackUrl=%2Fapp%2Fsettings%2Fsecurity";
 
 export default async function SecurityCenterPage() {
   const githubStatus = await serverApiFetch<GitHubStatusPayload>("/connectors/github/status");
@@ -45,7 +44,6 @@ export default async function SecurityCenterPage() {
       status: googleStatus?.linked ? "linked" : "not linked",
       detail: googleStatus?.has_access_token ? "token available" : "token unavailable",
     },
-    { provider: "Passkey", status: "enrolled", icon: "key" }
   ];
 
   const recentActions = [
@@ -58,7 +56,7 @@ export default async function SecurityCenterPage() {
       <header>
         <h1 className="text-2xl font-bold text-fg-primary">Security Center</h1>
         <p className="mt-1 text-sm text-fg-muted">
-          Auth0 session state, linked accounts, and sensitive action history.
+          Session, linked accounts (Google / GitHub), and sensitive action history.
         </p>
       </header>
 

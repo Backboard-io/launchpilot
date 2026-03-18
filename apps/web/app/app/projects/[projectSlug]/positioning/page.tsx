@@ -106,7 +106,7 @@ export default function PositioningPage() {
     [loadVersions, projectId]
   );
 
-  const continueHref = useMemo(() => `/app/projects/${projectSlug}/execution`, [projectSlug]);
+  const continueHref = useMemo(() => `/app/projects/${projectSlug}/execution/plan`, [projectSlug]);
 
   if (loading) {
     return (

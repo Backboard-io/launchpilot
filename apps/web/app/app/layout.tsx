@@ -3,14 +3,14 @@ import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
-import { auth0 } from "@/lib/auth0";
+import { auth, isAuthEnabled } from "@/lib/auth";
 
 export default async function ProtectedLayout({ children }: { children: ReactNode }) {
-  if (!auth0) {
+  if (!isAuthEnabled()) {
     return <AppShell>{children}</AppShell>;
   }
 
-  const session = await auth0.getSession();
+  const session = await auth();
   if (!session) {
     redirect("/login");
   }

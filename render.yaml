@@ -1,9 +1,3 @@
-databases:
-  - name: launchpilot-db
-    plan: free
-    databaseName: launchpilot
-    user: launchpilot
-
 services:
   - type: web
     name: launchpilot-api
@@ -18,7 +12,7 @@ services:
         value: dev
       - key: WEB_APP_URL
         sync: false
-      - key: SUPABASE_DB_URL
+      - key: DATABASE_URL
         sync: false
       - key: BACKBOARD_API_KEY
         sync: false
@@ -34,17 +28,24 @@ services:
         value: gpt-4o
       - key: BACKBOARD_MEMORY_MODE
         value: On
-      - key: AUTH0_ISSUER
+      - key: AUTH_JWT_SECRET
         sync: false
-      - key: AUTH0_AUDIENCE
+      - key: API_BASE_URL
         sync: false
-      - key: APP_JWT_NAMESPACE
-        value: https://growthlaunchpad.app
-      - key: AUTH0_DOMAIN
+      - key: CONNECTOR_GOOGLE_CLIENT_ID
         sync: false
-      - key: AUTH0_M2M_CLIENT_ID
+      - key: CONNECTOR_GOOGLE_CLIENT_SECRET
         sync: false
-      - key: AUTH0_M2M_CLIENT_SECRET
+      - key: CONNECTOR_GITHUB_CLIENT_ID
         sync: false
-      - key: AUTH0_MANAGEMENT_AUDIENCE
+      - key: CONNECTOR_GITHUB_CLIENT_SECRET
+        sync: false
+      # Litestream / S3 replication (set these in Render dashboard)
+      - key: LITESTREAM_BUCKET
+        sync: false
+      - key: LITESTREAM_REGION
+        value: us-east-1
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
         sync: false

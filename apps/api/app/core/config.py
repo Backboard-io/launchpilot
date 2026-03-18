@@ -13,18 +13,22 @@ class Settings(BaseSettings):
 
     # Auth mode:
     # - dev: local fallback user + scopes
-    # - auth0: strict JWT verification via AUTH0_ISSUER/AUTH0_AUDIENCE
+    # - oauth: JWT verification via AUTH_JWT_SECRET (NextAuth / Google / GitHub)
     auth_mode: str = "dev"
     app_jwt_namespace: str = Field(default="https://growthlaunchpad.app")
-    auth0_domain: str | None = None
-    auth0_issuer: str | None = None
-    auth0_audience: str | None = None
-    auth0_m2m_client_id: str | None = None
-    auth0_m2m_client_secret: str | None = None
-    auth0_management_audience: str | None = None
+    auth_jwt_secret: str | None = None
     google_drive_default_folder_id: str | None = None
+    api_base_url: str = "http://localhost:8000"
+    connector_google_client_id: str | None = None
+    connector_google_client_secret: str | None = None
+    connector_github_client_id: str | None = None
+    connector_github_client_secret: str | None = None
+    github_callback_url: str = "/v1/connectors/github/callback"
 
-    supabase_db_url: str = Field(default="postgresql+psycopg://postgres:postgres@localhost:5432/postgres")
+    database_url: str = Field(default="sqlite+pysqlite:///./data/launchpilot.db")
+
+    # Admin: comma-separated emails; these users get is_admin and can access /admin
+    admin_emails: str = Field(default="dev@growthlaunchpad.app", description="Comma-separated admin emails")
 
     resend_api_key: str | None = None
     resend_from_email: str = "noreply@growthlaunchpad.app"

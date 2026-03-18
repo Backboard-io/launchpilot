@@ -28,7 +28,7 @@ const steps = [
     key: "execution",
     label: "Execution",
     icon: "4",
-    href: (projectSlug: string) => `/app/projects/${projectSlug}/execution`
+    href: (projectSlug: string) => `/app/projects/${projectSlug}/execution/plan`
   }
 ];
 

@@ -51,6 +51,7 @@ export default function NewProjectPage() {
               const slug = response.data.slug;
               const fallbackSlug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "project";
               router.push(`/app/projects/${slug ?? fallbackSlug}`);
+              router.refresh();
             } catch {
               setError("Project creation failed.");
             } finally {
@@ -98,7 +99,7 @@ export default function NewProjectPage() {
               placeholder="owner/repo or https://github.com/owner/repo"
             />
             <p className="mt-1 text-xs text-fg-faint">
-              If provided, we verify access against your Auth0-linked GitHub account before creating the project.
+              If provided, we verify access against your linked GitHub account before creating the project.
             </p>
           </label>
 

@@ -5,7 +5,7 @@ from app.core.config import get_settings
 from app.db.session import get_db
 from app.models.workspace import WorkspaceMember
 from app.routers.utils import success
-from app.security.auth0 import CurrentUser, get_current_user
+from app.security.auth import CurrentUser, get_current_user
 from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/me", tags=["me"])
@@ -26,11 +26,16 @@ def get_me(current_user: CurrentUser = Depends(get_current_user), db: Session = 
 
     db.commit()
 
+    admin_emails_set = {e.strip().lower() for e in settings.admin_emails.split(",") if e.strip()}
+    is_admin = (current_user.email or "").lower() in admin_emails_set
+
     return success(
         {
+            "id": str(user.id),
             "sub": current_user.sub,
             "email": current_user.email,
             "name": current_user.name,
+            "is_admin": is_admin,
             "scopes": sorted(current_user.scopes),
             "default_workspace": {
                 "workspace_id": str(workspace.id),
@@ -40,7 +45,7 @@ def get_me(current_user: CurrentUser = Depends(get_current_user), db: Session = 
             },
             "feature_flags": {
                 "auth_mode": settings.auth_mode,
-                "enable_auth0": settings.auth_mode == "auth0",
+                "enable_oauth": settings.auth_mode == "oauth",
             },
         }
     )

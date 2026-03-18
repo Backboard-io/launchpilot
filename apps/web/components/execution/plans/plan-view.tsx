@@ -13,6 +13,20 @@ export interface Plan {
   status: string;
 }
 
+export type TaskCategory = "infra" | "coding" | "text_social" | "video_social";
+
+export const TASK_CATEGORY_OPTIONS: { value: TaskCategory; label: string; points: number }[] = [
+  { value: "infra", label: "Infra (0 pts)", points: 0 },
+  { value: "coding", label: "Coding (0 pts)", points: 0 },
+  { value: "text_social", label: "Text-based social post (1 pt)", points: 1 },
+  { value: "video_social", label: "Video post (3 pts)", points: 3 }
+];
+
+export function taskCategoryPoints(category: TaskCategory | null | undefined): number {
+  const opt = TASK_CATEGORY_OPTIONS.find((o) => o.value === category);
+  return opt?.points ?? 0;
+}
+
 export interface Task {
   id: string;
   launch_plan_id: string;
@@ -21,6 +35,10 @@ export interface Task {
   description?: string;
   status?: string;
   priority?: number;
+  evidence_url?: string | null;
+  evidence_verified_at?: string | null;
+  category?: TaskCategory | string | null;
+  assignee_id?: string | null;
 }
 
 interface PlanViewProps {

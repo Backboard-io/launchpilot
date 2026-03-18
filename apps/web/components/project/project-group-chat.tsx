@@ -1,12 +1,14 @@
 "use client";
 
 import { useParams, usePathname } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AgentChat, AgentChatResponse } from "@/components/chat/agent-chat";
 import { Message } from "@/components/chat/chat-message";
+import { useChatCollapse } from "@/components/project/chat-collapse-context";
 import { apiFetch } from "@/lib/api";
 import { createLocalMessageId, isLocalMessageId, mergeSavedMessages } from "@/lib/agent-chat";
+import { cn } from "@/lib/utils";
 
 interface ProjectRow {
   id: string;
@@ -52,9 +54,12 @@ export function ProjectGroupChat() {
   const params = useParams<{ projectSlug: string }>();
   const pathname = usePathname();
   const projectSlug = params.projectSlug;
+  const { collapsed, setCollapsed } = useChatCollapse();
   const [projectId, setProjectId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [runningAction, setRunningAction] = useState<string | null>(null);
+  const [hasPlan, setHasPlan] = useState<boolean>(false);
+  const initialCollapsedSet = useRef(false);
 
   const contextPage = useMemo(() => {
     if (pathname.includes("/research")) return "research";
@@ -117,7 +122,14 @@ export function ProjectGroupChat() {
     if (!project) return;
     setProjectId(project.id);
     await loadChatMessages(project.id);
-  }, [loadChatMessages, projectSlug]);
+    const state = await apiFetch<{ plans?: unknown[] }>(`/projects/${project.id}/execution/state`);
+    const planExists = (state?.plans?.length ?? 0) > 0;
+    setHasPlan(planExists);
+    if (!initialCollapsedSet.current) {
+      setCollapsed(planExists);
+      initialCollapsedSet.current = true;
+    }
+  }, [loadChatMessages, projectSlug, setCollapsed]);
 
   useEffect(() => {
     void load();
@@ -257,6 +269,8 @@ export function ProjectGroupChat() {
           `Outreach: ${outreachData?.prepared ? "email batch prepared" : (outreachData?.chat_message?.trim() || "updated")}`
         ];
 
+        setHasPlan(true);
+        setCollapsed(true);
         return { content: lines.join("\n"), agentLabel: "Auto Router -> Full Pipeline" };
       }
 
@@ -284,6 +298,8 @@ export function ProjectGroupChat() {
           { method: "POST", body: JSON.stringify({ advice: message, mode }) }
         );
         setExecutionFocus("plan");
+        setHasPlan(true);
+        setCollapsed(true);
         return { content: data?.chat_message?.trim() || "Plan updated with your daily targets.", agentLabel: "Plan Agent" };
       }
 
@@ -414,6 +430,8 @@ export function ProjectGroupChat() {
         { method: "POST", body: JSON.stringify({ advice: message, mode }) }
       );
       setExecutionFocus("plan");
+      setHasPlan(true);
+      setCollapsed(true);
       return { content: planData?.chat_message?.trim() || "Plan updated with your daily targets.", agentLabel: "Auto Router -> Plan" };
     } catch {
       await appendSystemError("Request failed. Please try again.", messages);
@@ -423,26 +441,67 @@ export function ProjectGroupChat() {
     }
   }, [appendSystemError, messages, projectId]);
 
+  const isCollapsed = collapsed === true;
+  const showExpanded = !isCollapsed;
+
   return (
-    <div className="h-full overflow-hidden rounded-xl border border-edge-subtle bg-surface-muted">
-      <AgentChat
-        agentName="Project Group Chat"
-        agentDescription="One chat routing to research, positioning, and execution agents"
-        placeholder="Ask anything about research, positioning, assets, outreach, or execution planning..."
-        onSend={handleSend}
-        isProcessing={runningAction !== null}
-        messages={messages}
-        onMessagesChange={saveChatMessages}
-        agentOptions={[
-          { value: "auto", label: "Auto" },
-          { value: "research", label: "Research Agent" },
-          { value: "positioning", label: "Positioning Agent" },
-          { value: "plan", label: "Plan Agent" },
-          { value: "assets", label: "Assets Agent" },
-          { value: "outreach", label: "Outreach Agent" }
-        ]}
-        quickActions={quickActions}
-      />
+    <div className="flex h-full min-h-0">
+      {showExpanded ? (
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-muted">
+          <AgentChat
+            agentName="Project Group Chat"
+            agentDescription="One chat routing to research, positioning, and execution agents"
+            placeholder="Ask anything about research, positioning, assets, outreach, or execution planning..."
+            onSend={handleSend}
+            isProcessing={runningAction !== null}
+            messages={messages}
+            onMessagesChange={saveChatMessages}
+            onCollapse={() => setCollapsed(true)}
+            agentOptions={[
+              { value: "auto", label: "Auto" },
+              { value: "research", label: "Research Agent" },
+              { value: "positioning", label: "Positioning Agent" },
+              { value: "plan", label: "Plan Agent" },
+              { value: "assets", label: "Assets Agent" },
+              { value: "outreach", label: "Outreach Agent" }
+            ]}
+            quickActions={quickActions}
+          />
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className={cn(
+            "group flex h-full w-full flex-col items-center justify-center gap-3 rounded-xl border border-edge-subtle bg-surface-muted",
+            "transition-all duration-200 hover:border-accent/40 hover:bg-surface-elevated",
+            "focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2 focus:ring-offset-surface-base"
+          )}
+          title="Expand group chat"
+          aria-label="Expand chat"
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-accent to-blue-400 shadow-md shadow-accent/20 transition-transform duration-200 group-hover:scale-110">
+            <svg className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+          </div>
+          <span
+            className="text-[10px] font-semibold uppercase tracking-widest text-fg-faint transition-colors duration-200 group-hover:text-fg-muted"
+            style={{ writingMode: "vertical-rl", textOrientation: "mixed" }}
+          >
+            Chat
+          </span>
+          <svg
+            className="h-3.5 w-3.5 text-fg-faint transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-accent"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

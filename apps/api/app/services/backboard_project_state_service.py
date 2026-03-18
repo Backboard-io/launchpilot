@@ -5,6 +5,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -53,7 +54,7 @@ class BackboardProjectStateService:
     def sync_after_action(
         self,
         *,
-        project_id: str,
+        project_id: UUID | str,
         reason: str,
         stage: str,
         extra: dict[str, Any] | None = None,
@@ -62,17 +63,20 @@ class BackboardProjectStateService:
             return {"status": "skipped", "reason": "backboard_disabled"}
 
         try:
-            assistant_ids = self._ensure_project_scoped_assistants(project_id)
-            snapshot = self._build_project_state_snapshot(project_id)
+            resolved_project_id = self._coerce_project_id(project_id)
+            assistant_ids = self._ensure_project_scoped_assistants(resolved_project_id)
+            snapshot = self._build_project_state_snapshot(resolved_project_id)
             content = self._build_memory_content(
-                project_id=project_id,
+                project_id=str(resolved_project_id),
                 reason=reason,
                 stage=stage,
                 snapshot=snapshot,
                 extra=extra or {},
             )
             content_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
-            last_hash = get_project_memory_value(self.db, project_id, "backboard_project_state_last_hash", {})
+            last_hash = get_project_memory_value(
+                self.db, resolved_project_id, "backboard_project_state_last_hash", {}
+            )
             if isinstance(last_hash, dict) and last_hash.get("hash") == content_hash:
                 result = {
                     "status": "skipped",
@@ -83,7 +87,7 @@ class BackboardProjectStateService:
                 }
                 upsert_project_memory(
                     self.db,
-                    project_id,
+                    resolved_project_id,
                     "backboard_project_state_last_sync",
                     result,
                     "integration_ref",
@@ -114,12 +118,12 @@ class BackboardProjectStateService:
                             assistant_ref["assistant_id"],
                             exc,
                         )
-                        replacement_id = self._rotate_project_state_assistant(project_id)
+                        replacement_id = self._rotate_project_state_assistant(resolved_project_id)
                         try:
                             raw = self.client.add_memory(replacement_id, content)
                             LOGGER.info(
                                 "backboard.project_state_memory_recovered project_id=%s previous_assistant_id=%s replacement_assistant_id=%s",
-                                project_id,
+                                resolved_project_id,
                                 assistant_ref["assistant_id"],
                                 replacement_id,
                             )
@@ -169,7 +173,7 @@ class BackboardProjectStateService:
             if synced:
                 upsert_project_memory(
                     self.db,
-                    project_id,
+                    resolved_project_id,
                     "backboard_project_state_last_hash",
                     {"hash": content_hash, "synced_at": result["synced_at"]},
                     "integration_ref",
@@ -186,7 +190,7 @@ class BackboardProjectStateService:
 
         upsert_project_memory(
             self.db,
-            project_id,
+            resolved_project_id,
             "backboard_project_state_last_sync",
             result,
             "integration_ref",
@@ -201,7 +205,9 @@ class BackboardProjectStateService:
 
         refs: list[dict[str, str]] = []
 
-        state_assistant_mem = get_project_memory_value(self.db, project_id, "backboard_project_state_assistant", {})
+        state_assistant_mem = get_project_memory_value(
+            self.db, project_id, "backboard_project_state_assistant", {}
+        )
         state_assistant_id = state_assistant_mem.get("assistant_id")
         if not state_assistant_id:
             state_assistant_id = self.client.create_assistant(
@@ -627,17 +633,20 @@ class BackboardProjectStateService:
         text = str(exc).lower()
         return any(code in text for code in ("(429)", "(500)", "(502)", "(503)", "(504)"))
 
-    def _rotate_project_state_assistant(self, project_id: str) -> str:
-        project = self.db.query(Project).filter(Project.id == project_id).first()
+    def _rotate_project_state_assistant(self, project_id: UUID | str) -> str:
+        resolved_project_id = self._coerce_project_id(project_id)
+        project = self.db.query(Project).filter(Project.id == resolved_project_id).first()
         project_name = project.name if project and project.name else "project"
-        previous = get_project_memory_value(self.db, project_id, "backboard_project_state_assistant", {}).get("assistant_id")
+        previous = get_project_memory_value(
+            self.db, resolved_project_id, "backboard_project_state_assistant", {}
+        ).get("assistant_id")
         assistant_id = self.client.create_assistant(
             name=f"{project_name}-project-state",
             system_prompt=PROJECT_STATE_PROMPT,
         )
         upsert_project_memory(
             self.db,
-            project_id,
+            resolved_project_id,
             "backboard_project_state_assistant",
             {
                 "assistant_id": assistant_id,
@@ -648,3 +657,8 @@ class BackboardProjectStateService:
             "backboard",
         )
         return assistant_id
+
+    def _coerce_project_id(self, project_id: UUID | str) -> str:
+        if isinstance(project_id, str):
+            return project_id
+        return str(project_id)

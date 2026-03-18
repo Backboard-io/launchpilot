@@ -1,0 +1,12 @@
+dbs:
+  - path: ${SQLITE_DB_PATH}
+    replicas:
+      - type: s3
+        bucket: ${LITESTREAM_BUCKET}
+        path: launchpilot/db
+        region: ${LITESTREAM_REGION}
+        # Set to empty string for real AWS S3; set to e.g. http://localstack:4566 for local dev.
+        endpoint: ${LITESTREAM_ENDPOINT}
+        force-path-style: true
+        access-key-id: ${AWS_ACCESS_KEY_ID}
+        secret-access-key: ${AWS_SECRET_ACCESS_KEY}

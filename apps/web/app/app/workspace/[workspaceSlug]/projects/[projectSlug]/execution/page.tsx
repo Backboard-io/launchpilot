@@ -6,5 +6,5 @@ export default async function ExecutionPage({
   params: Promise<{ workspaceSlug: string; projectSlug: string }>;
 }) {
   const { projectSlug } = await params;
-  redirect(`/app/projects/${projectSlug}/execution`);
+  redirect(`/app/projects/${projectSlug}/execution/plan`);
 }

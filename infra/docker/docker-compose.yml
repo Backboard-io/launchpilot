@@ -1,50 +1,90 @@
 services:
-  db:
-    image: postgres:16
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+  localstack:
+    image: localstack/localstack:latest
     ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: ["CMD", "curl", "-sf", "http://localhost:4566/_localstack/health"]
       interval: 5s
       timeout: 5s
       retries: 20
-      start_period: 5s
+      start_period: 10s
 
-  migrate:
-    image: python:3.12-slim
-    working_dir: /workspace/apps/api
-    command: sh -c "pip install -r requirements.txt && alembic upgrade head"
-    volumes:
-      - ../../:/workspace
-    env_file:
-      - ../../.env
+  bucket-init:
+    image: amazon/aws-cli:latest
     environment:
-      SUPABASE_DB_URL: postgresql+psycopg://postgres:postgres@db:5432/postgres
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      sh -c "aws --endpoint-url=http://localstack:4566 s3 mb s3://launchpilot-local --region us-east-1 2>/dev/null || true && echo 'Bucket ready: s3://launchpilot-local'"
     depends_on:
-      db:
+      localstack:
         condition: service_healthy
 
+  # Single container: API + frontend (Next.js), ready for AWS App Runner.
   api:
-    image: python:3.12-slim
-    working_dir: /workspace/apps/api
-    command: sh -c "pip install -r requirements.txt && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    build:
+      context: ../..
+      dockerfile: apps/api/Dockerfile
+    working_dir: /app
     volumes:
-      - ../../:/workspace
+      - sqlite_data:/data
     env_file:
       - ../../.env
     environment:
-      SUPABASE_DB_URL: postgresql+psycopg://postgres:postgres@db:5432/postgres
+      DATABASE_URL: "sqlite+pysqlite:////data/launchpilot.db"
+      SQLITE_DB_PATH: "/data/launchpilot.db"
+      LITESTREAM_BUCKET: "launchpilot-local"
+      LITESTREAM_ENDPOINT: "http://localstack:4566"
+      LITESTREAM_REGION: "us-east-1"
+      AWS_ACCESS_KEY_ID: "test"
+      AWS_SECRET_ACCESS_KEY: "test"
+      PORT: "8000"
+      NEXT_PUBLIC_API_BASE_URL: "http://localhost:8000/v1"
+      APP_BASE_URL: "http://localhost:3000"
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      WEB_APP_URL: "http://localhost:3000"
+      # AUTH_MODE: "oauth"
+      # BACKBOARD_API_KEY: "espr_cYodyuTRrijktQ8PPhJ963lLefqTgz33f2kohbUDo8w"
+      APP_JWT_NAMESPACE: "https://growthlaunchpad.app"
+      RESEND_API_KEY: ""
+      RESEND_FROM_EMAIL: "noreply@growthlaunchpad.app"
+      BACKBOARD_BASE_URL: "https://app.backboard.io/api"
+      BACKBOARD_LLM_PROVIDER: "openai"
+      BACKBOARD_MODEL_NAME: "gpt-4o"
+      BACKBOARD_MEMORY_MODE: "On"
+      AUTH_JWT_SECRET: "any-local-dev-secret-string"
+      AUTH_SECRET: "any-local-dev-secret-string"
+      GMAIL_USER: "${GMAIL_USER:-}"
+      GMAIL_APP_PASSWORD: "${GMAIL_APP_PASSWORD:-}"
+      ALERT_RECIPIENT_EMAIL: "${ALERT_RECIPIENT_EMAIL:-}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL:-/oauth/google/callback}"
+      GITHUB_CLIENT_ID: "${GITHUB_CLIENT_ID:-}"
+      GITHUB_CLIENT_SECRET: "${GITHUB_CLIENT_SECRET:-}"
+      GITHUB_CALLBACK_URL: "${GITHUB_CALLBACK_URL:-/oauth/github/callback}"
+      CONNECTOR_GITHUB_CLIENT_ID: "${CONNECTOR_GITHUB_CLIENT_ID:-}"
+      CONNECTOR_GITHUB_CLIENT_SECRET: "${CONNECTOR_GITHUB_CLIENT_SECRET:-}"
+      GITHUB_ID: "${GITHUB_ID:-}"
+      GITHUB_SECRET: "${GITHUB_SECRET:-}"
+      API_BASE_URL: "http://localhost:8000"
+      API_INTERNAL_URL: "http://127.0.0.1:9000/v1"
+      ADMIN_EMAILS: "${ADMIN_EMAILS:-}"
+
+      # Auth.js: trust Host when served from Docker/App Runner (browser uses localhost or public URL).
+      AUTH_TRUST_HOST: "true"
+      AUTH_URL: "http://localhost:8000"
     ports:
       - "8000:8000"
+      - "3001:3001"
     depends_on:
-      migrate:
+      bucket-init:
         condition: service_completed_successfully
 
 volumes:
-  pgdata:
+  sqlite_data:

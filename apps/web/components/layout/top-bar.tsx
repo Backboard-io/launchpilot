@@ -74,7 +74,7 @@ export function TopBar() {
         <ThemeToggle />
         <div className="h-4 w-px bg-edge-subtle" />
         <Link
-          href="/auth/logout"
+          href="/auth/signout"
           className="rounded-lg px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:bg-red-500/10 hover:text-red-400"
         >
           Logout

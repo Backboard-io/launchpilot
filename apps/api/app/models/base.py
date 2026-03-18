@@ -1,17 +1,30 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy.types import Uuid
+from sqlalchemy import DateTime, String, func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, validates
+
+
+def _hex(value) -> str:
+    if isinstance(value, uuid.UUID):
+        return value.hex
+    if isinstance(value, str):
+        return value.replace("-", "")
+    return value
 
 
 class Base(DeclarativeBase):
     pass
 
 
+class ProjectIdMixin:
+    @validates("project_id")
+    def _coerce_project_id(self, key, value):
+        return _hex(value)
+
+
 class UUIDPrimaryKeyMixin:
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=lambda: uuid.uuid4().hex)
 
 
 class TimestampMixin:

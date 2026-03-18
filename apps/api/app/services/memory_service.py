@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 from sqlalchemy import func
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from app.models.project import ProjectMemory
+
+
+def _to_hex_id(project_id) -> str:
+    return str(project_id).replace("-", "")
 
 
 def upsert_project_memory(
@@ -15,10 +19,11 @@ def upsert_project_memory(
     memory_type: str,
     source: str,
 ) -> ProjectMemory:
+    pid = _to_hex_id(project_id)
     stmt = (
         insert(ProjectMemory)
         .values(
-            project_id=project_id,
+            project_id=pid,
             memory_key=key,
             memory_value=value,
             memory_type=memory_type,
@@ -48,9 +53,10 @@ def get_project_memory_value(
     key: str,
     default: dict | None = None,
 ) -> dict:
+    pid = _to_hex_id(project_id)
     row = (
         db.query(ProjectMemory)
-        .filter(ProjectMemory.project_id == project_id, ProjectMemory.memory_key == key)
+        .filter(ProjectMemory.project_id == pid, ProjectMemory.memory_key == key)
         .first()
     )
     if not row:

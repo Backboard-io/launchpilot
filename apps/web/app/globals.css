@@ -154,6 +154,41 @@ a {
   animation: skeleton-shimmer 1.5s ease-in-out infinite;
 }
 
+/* Delightful micro-interactions */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+.dark .card-hover:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.row-hover {
+  transition: transform 0.15s ease;
+}
+.row-hover:hover {
+  transform: translateX(2px);
+}
+
+/* Checkbox morph - delightful toggle */
+.check-morph {
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+.check-morph:checked {
+  transform: scale(1.05);
+}
+.check-morph:active {
+  transform: scale(0.97);
+}
+
+.stagger-item {
+  animation: slide-up 0.35s ease-out forwards;
+  opacity: 0;
+}
+
 /* Staggered animation delays */
 .stagger > *:nth-child(1) { animation-delay: 0ms; }
 .stagger > *:nth-child(2) { animation-delay: 50ms; }

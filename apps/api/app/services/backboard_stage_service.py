@@ -302,6 +302,7 @@ class BackboardStageService:
             "agent_output",
             "backboard",
         )
+        self.db.commit()
 
         return parsed, BackboardRunTrace(
             provider="backboard",
@@ -360,6 +361,7 @@ class BackboardStageService:
                 "integration_ref",
                 "backboard",
             )
+            self.db.commit()
 
         if not thread_id:
             thread_id = self.client.create_thread(assistant_id)
@@ -371,6 +373,7 @@ class BackboardStageService:
                 "integration_ref",
                 "backboard",
             )
+            self.db.commit()
 
         return assistant_id, thread_id
 
@@ -409,6 +412,7 @@ class BackboardStageService:
             "integration_ref",
             "backboard",
         )
+        self.db.commit()
         return assistant_id, thread_id
 
     def _build_stage_message(

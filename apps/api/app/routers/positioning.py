@@ -12,7 +12,7 @@ from app.models.chat import AgentChatMessage
 from app.models.positioning import PositioningVersion
 from app.routers.utils import success
 from app.schemas.positioning import PositioningRunRequest
-from app.security.auth0 import CurrentUser
+from app.security.auth import CurrentUser
 from app.security.permissions import require_scope
 from app.services.audit_service import AuditService
 from app.services.backboard_project_state_service import BackboardProjectStateService
@@ -62,7 +62,7 @@ def run_positioning(
     if output.get("chat_message"):
         db.add(
             AgentChatMessage(
-                project_id=str(project_id),
+                project_id=project_id,
                 agent_type="positioning",
                 role="assistant",
                 content=str(output.get("chat_message") or ""),

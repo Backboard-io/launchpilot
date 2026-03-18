@@ -5,6 +5,7 @@ from app.models.project import Project, ProjectBrief, ProjectMemory, ProjectSour
 from app.models.positioning import PositioningVersion
 from app.models.research import Competitor, OpportunityWedge, PainPointCluster, ResearchRun
 from app.models.workspace import User, Workspace, WorkspaceMember
+from app.models.connector import ConnectorCredential
 
 __all__ = [
     "User",

@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.models.approval import Approval
 from app.routers.utils import success
 from app.schemas.approval import ApprovalDecisionRequest
-from app.security.auth0 import CurrentUser, get_current_user
+from app.security.auth import CurrentUser, get_current_user
 from app.security.permissions import require_scope
 from app.services.backboard_project_state_service import BackboardProjectStateService
 

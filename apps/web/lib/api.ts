@@ -1,4 +1,4 @@
-import { auth0 } from "@/lib/auth0";
+import { auth, createApiToken, isAuthEnabled } from "@/lib/auth";
 import { env } from "@/lib/env";
 
 export interface ApiErrorPayload {
@@ -53,13 +53,18 @@ async function getClientAccessToken(): Promise<string | null> {
 
 // Server-side token fetch
 async function getServerAccessToken(): Promise<string | null> {
-  if (!auth0) {
+  if (!isAuthEnabled()) {
     return null;
   }
 
   try {
-    const tokenResponse = await auth0.getAccessToken();
-    return tokenResponse?.token ?? null;
+    const session = await auth();
+    if (!session?.user?.id) return null;
+    return await createApiToken({
+      sub: session.user.id,
+      email: session.user.email ?? null,
+      name: session.user.name ?? null,
+    });
   } catch {
     return null;
   }
@@ -139,7 +144,7 @@ export async function serverApiFetch<T>(path: string, init?: RequestInit): Promi
       headers.set("Authorization", `Bearer ${token}`);
     }
 
-    const response = await fetch(`${env.apiBaseUrl}${path}`, {
+    const response = await fetch(`${env.apiInternalBaseUrl}${path}`, {
       ...init,
       headers,
       cache: "no-store"

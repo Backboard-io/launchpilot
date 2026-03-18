@@ -4,13 +4,17 @@ from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
 
-from app.models.base import Base, UUIDPrimaryKeyMixin
+from app.models.base import Base, ProjectIdMixin, UUIDPrimaryKeyMixin
 
 
-class AgentChatMessage(Base, UUIDPrimaryKeyMixin):
+class AgentChatMessage(Base, ProjectIdMixin, UUIDPrimaryKeyMixin):
     __tablename__ = "agent_chat_messages"
 
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    project_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     agent_type: Mapped[str] = mapped_column(String, nullable=False)  # research, positioning, execution
     role: Mapped[str] = mapped_column(String, nullable=False)  # user, assistant, system
     content: Mapped[str] = mapped_column(Text, nullable=False)

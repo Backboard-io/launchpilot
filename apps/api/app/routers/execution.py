@@ -17,7 +17,6 @@ from app.agents.execution_agent import (
 )
 from app.agents.shared_context import build_project_context
 from app.db.session import get_db
-from app.integrations.auth0_google_connector import Auth0GoogleConnector
 from app.integrations.backboard_client import BackboardRequestError
 from app.integrations.google_drive_client import GoogleDriveClient
 from app.models.approval import Approval
@@ -35,9 +34,11 @@ from app.schemas.execution import (
     ExecutionPlanRequest,
     ImageAdDraftRequest,
     ImageAdRenderRequest,
+    TASK_CATEGORIES,
     TaskUpdateRequest,
 )
-from app.security.auth0 import CurrentUser, get_current_user
+from app.security.auth import CurrentUser, get_current_user
+from app.services.connector_service import get_google_access_token
 from app.security.permissions import require_scope
 from app.services.audit_service import AuditService
 from app.services.backboard_project_state_service import BackboardProjectStateService
@@ -46,6 +47,21 @@ from app.services.execution_service import ExecutionService
 from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/projects/{project_id}/execution", tags=["execution"])
+
+
+def _quick_verify_url(url: str) -> bool:
+    """HEAD request to verify link is reachable (2xx). Fall back to GET if HEAD returns 405. Timeout 5s."""
+    try:
+        with httpx.Client(timeout=5.0, follow_redirects=True) as client:
+            r = client.head(url)
+            if 200 <= r.status_code < 400:
+                return True
+            if r.status_code == 405:
+                r = client.get(url)
+                return 200 <= r.status_code < 400
+            return False
+    except Exception:
+        return False
 
 
 def _normalize_email(email: str | None) -> str | None:
@@ -153,7 +169,7 @@ def _store_execution_assistant_reply(
         return
     db.add(
         AgentChatMessage(
-            project_id=str(project_id),
+            project_id=project_id,
             agent_type="execution",
             role="assistant",
             content=text,
@@ -886,6 +902,10 @@ def get_execution_state(
                     "description": task.description,
                     "status": task.status,
                     "priority": task.priority,
+                    "evidence_url": task.evidence_url,
+                    "evidence_verified_at": task.evidence_verified_at.isoformat() if task.evidence_verified_at else None,
+                    "category": task.category,
+                    "assignee_id": str(task.assignee_id) if task.assignee_id else None,
                 }
                 for task in tasks
             ],
@@ -945,10 +965,12 @@ def update_task(
     project_id: UUID,
     task_id: UUID,
     payload: TaskUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
     _scope: CurrentUser = Depends(require_scope("execution:run")),
     db: Session = Depends(get_db),
 ):
-    ProjectService(db).get_project_or_404(project_id)
+    project_service = ProjectService(db)
+    project_service.get_project_or_404(project_id)
 
     task = db.query(LaunchTask).filter(LaunchTask.id == task_id).first()
     if not task:
@@ -969,9 +991,38 @@ def update_task(
         task.priority = payload.priority
     if payload.status is not None:
         task.status = payload.status
+        # Auto-assign current user when marking complete and no assignee yet
+        if payload.status in ("completed", "succeeded") and task.assignee_id is None:
+            user = project_service.get_or_create_local_user(current_user)
+            task.assignee_id = user.id
+    if payload.evidence_url is not None:
+        task.evidence_url = payload.evidence_url.strip() or None
+        if task.evidence_url and _quick_verify_url(task.evidence_url):
+            task.evidence_verified_at = datetime.now(timezone.utc)
+            if task.assignee_id is None:
+                user = project_service.get_or_create_local_user(current_user)
+                task.assignee_id = user.id
+        else:
+            task.evidence_verified_at = None
+    if payload.evidence_verified is not None:
+        if payload.evidence_verified and task.evidence_url:
+            task.evidence_verified_at = datetime.now(timezone.utc)
+            if task.assignee_id is None:
+                user = project_service.get_or_create_local_user(current_user)
+                task.assignee_id = user.id
+        else:
+            task.evidence_verified_at = None
+    if payload.category is not None:
+        task.category = payload.category if payload.category in TASK_CATEGORIES else None
+    if "assignee_id" in payload.model_dump(exclude_unset=True):
+        task.assignee_id = (payload.assignee_id or "").strip() or None
 
     db.commit()
-    return success({"task_id": str(task.id), "updated": True})
+    return success({
+        "task_id": str(task.id),
+        "updated": True,
+        "evidence_verified": task.evidence_verified_at is not None,
+    })
 
 
 @router.patch("/assets/{asset_id}")
@@ -1080,8 +1131,7 @@ def write_to_google_drive(
 ):
     ProjectService(db).get_project_or_404(project_id)
 
-    connector = Auth0GoogleConnector()
-    access_token = connector.google_access_token(current_user.sub)
+    access_token = get_google_access_token(db, current_user.sub)
     if not access_token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

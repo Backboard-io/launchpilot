@@ -3,11 +3,12 @@ from __future__ import annotations
 import re
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.project import Project
 from app.models.workspace import User, Workspace, WorkspaceMember
-from app.security.auth0 import CurrentUser
+from app.security.auth import CurrentUser
 
 
 class ProjectService:
@@ -33,14 +34,18 @@ class ProjectService:
         if user:
             return user
 
-        user = User(
-            auth0_user_id=current_user.sub,
-            email=current_user.email or "dev@growthlaunchpad.app",
-            name=current_user.name,
-        )
-        self.db.add(user)
-        self.db.flush()
-        return user
+        try:
+            user = User(
+                auth0_user_id=current_user.sub,
+                email=current_user.email or "dev@growthlaunchpad.app",
+                name=current_user.name,
+            )
+            self.db.add(user)
+            self.db.flush()
+            return user
+        except IntegrityError:
+            self.db.rollback()
+            return self.db.query(User).filter(User.auth0_user_id == current_user.sub).one()
 
     def get_or_create_default_workspace(self, user: User) -> Workspace:
         workspace = (

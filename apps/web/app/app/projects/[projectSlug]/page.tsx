@@ -42,8 +42,21 @@ interface PositioningVersion {
   positioning_statement?: string;
 }
 
+const TASK_CATEGORY_POINTS: Record<string, number> = {
+  infra: 0,
+  coding: 0,
+  text_social: 1,
+  video_social: 3
+};
+
 interface ExecutionState {
-  tasks: Array<{ id: string; title: string; status?: string }>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    status?: string;
+    evidence_verified_at?: string | null;
+    category?: string | null;
+  }>;
   assets: Array<{ id: string; asset_type: string; status: string }>;
   contacts: Array<{ id: string }>;
   batches: Array<{ id: string; status: string }>;
@@ -105,7 +118,7 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
     {
       number: "3",
       label: "Generate Launch Actions",
-      href: `/app/projects/${projectSlug}/execution`,
+      href: `/app/projects/${projectSlug}/execution/plan`,
       completed: currentStageIndex > 2,
       primary: currentStageIndex === 2 || currentStageIndex === 3
     }
@@ -122,6 +135,14 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
   const completedTasks = execution?.tasks?.filter((t) => t.status === "completed" || t.status === "succeeded").length ?? 0;
   const totalTasks = execution?.tasks?.length ?? 0;
   const pendingBatches = execution?.batches?.filter((b) => b.status === "pending_approval").length ?? 0;
+  const verifiedTasks = execution?.tasks?.filter(
+    (t) => (t.status === "completed" || t.status === "succeeded") && t.evidence_verified_at
+  ) ?? [];
+  const verifiedCount = verifiedTasks.length;
+  const verifiedPoints = verifiedTasks.reduce(
+    (sum, t) => sum + (TASK_CATEGORY_POINTS[t.category ?? ""] ?? 0),
+    0
+  );
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -322,12 +343,12 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
               </svg>
               Execution Progress
             </h2>
-            <Link href={`/app/projects/${projectSlug}/execution`} className="text-xs text-accent hover:underline">
+            <Link href={`/app/projects/${projectSlug}/execution/plan`} className="text-xs text-accent hover:underline">
               View all →
             </Link>
           </div>
 
-          <div className="mt-4 grid gap-4 sm:grid-cols-4">
+          <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div className="rounded-lg border border-edge-subtle bg-surface-elevated p-3 text-center">
               <p className="text-2xl font-bold text-fg-primary">{totalTasks}</p>
               <p className="text-xs text-fg-muted">Tasks</p>
@@ -335,6 +356,11 @@ export default async function ProjectOverviewPage({ params }: { params: Promise<
             <div className="rounded-lg border border-edge-subtle bg-surface-elevated p-3 text-center">
               <p className="text-2xl font-bold text-emerald-400">{completedTasks}</p>
               <p className="text-xs text-fg-muted">Completed</p>
+            </div>
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-3 text-center ring-1 ring-emerald-500/20">
+              <p className="text-2xl font-bold text-emerald-400">{verifiedCount}</p>
+              <p className="text-xs text-fg-muted">Verified</p>
+              <p className="mt-1 text-xs font-medium text-emerald-400/90">{verifiedPoints} pts</p>
             </div>
             <div className="rounded-lg border border-edge-subtle bg-surface-elevated p-3 text-center">
               <p className="text-2xl font-bold text-fg-primary">{execution?.assets?.length ?? 0}</p>

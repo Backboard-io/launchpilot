@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.chat import AgentChatMessage
 from app.routers.utils import success
-from app.security.auth0 import CurrentUser
+from app.security.auth import CurrentUser
 from app.security.permissions import require_scope
 from app.services.backboard_project_state_service import BackboardProjectStateService
 from app.services.project_service import ProjectService
@@ -37,7 +37,7 @@ def get_chat_messages(
     messages = (
         db.query(AgentChatMessage)
         .filter(
-            AgentChatMessage.project_id == str(project_id),
+            AgentChatMessage.project_id == project_id,
             AgentChatMessage.agent_type == agent_type,
         )
         .order_by(AgentChatMessage.created_at.asc())
@@ -71,7 +71,7 @@ def save_chat_messages(
     saved = []
     for msg in payload.messages:
         message = AgentChatMessage(
-            project_id=str(project_id),
+            project_id=project_id,
             agent_type=agent_type,
             role=msg.role,
             content=msg.content,
@@ -108,7 +108,7 @@ def clear_chat_messages(
     ProjectService(db).get_project_or_404(project_id)
 
     db.query(AgentChatMessage).filter(
-        AgentChatMessage.project_id == str(project_id),
+        AgentChatMessage.project_id == project_id,
         AgentChatMessage.agent_type == agent_type,
     ).delete()
 

@@ -7,14 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.integrations.auth0_github_connector import Auth0GithubConnector
 from app.integrations.github_client import GitHubClient
+from app.services.connector_service import get_github_access_token
 from app.models.approval import ActivityEvent
 from app.models.project import Project, ProjectBrief, ProjectMemory, ProjectSource
 from app.models.workspace import WorkspaceMember
 from app.routers.utils import success
 from app.schemas.project import ProjectBriefUpsertRequest, ProjectCreateRequest, ProjectSourceCreateRequest
-from app.security.auth0 import CurrentUser, get_current_user
+from app.security.auth import CurrentUser, get_current_user
 from app.security.permissions import require_scope
 from app.services.audit_service import AuditService
 from app.services.backboard_project_state_service import BackboardProjectStateService
@@ -69,7 +69,7 @@ def _parse_github_repo_input(raw: str) -> tuple[str, str]:
     return owner, repo
 
 
-def _verify_github_repo_for_user(current_user: CurrentUser, repo_input: str) -> str:
+def _verify_github_repo_for_user(db: Session, current_user: CurrentUser, repo_input: str) -> str:
     if "repo:read" not in current_user.scopes:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -77,7 +77,7 @@ def _verify_github_repo_for_user(current_user: CurrentUser, repo_input: str) -> 
         )
 
     owner, repo = _parse_github_repo_input(repo_input)
-    token = Auth0GithubConnector().github_access_token(current_user.sub)
+    token = get_github_access_token(db, current_user.sub)
     if not token:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -150,7 +150,7 @@ def create_project(
     workspace = project_service.get_or_create_default_workspace(actor)
     repo_url: str | None = None
     if payload.repo_url:
-        repo_url = _verify_github_repo_for_user(current_user, payload.repo_url)
+        repo_url = _verify_github_repo_for_user(db, current_user, payload.repo_url)
 
     slug = project_service.next_available_project_slug(workspace.id, payload.name)
 

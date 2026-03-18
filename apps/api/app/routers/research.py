@@ -14,7 +14,6 @@ from app.agents.lead_pipeline_agent import run_lead_enrichment_agent, run_lead_s
 from app.agents.research_agent import run_research_agent
 from app.agents.shared_context import build_project_context
 from app.db.session import SessionLocal, get_db
-from app.integrations.auth0_github_connector import Auth0GithubConnector
 from app.integrations.backboard_client import BackboardRequestError
 from app.integrations.github_client import GitHubClient
 from app.models.chat import AgentChatMessage
@@ -22,13 +21,14 @@ from app.models.execution import Contact
 from app.models.research import Competitor, OpportunityWedge, PainPointCluster, ResearchRun
 from app.routers.utils import success
 from app.schemas.research import ResearchRunRequest
-from app.security.auth0 import CurrentUser, get_current_user
+from app.security.auth import CurrentUser, get_current_user
 from app.security.permissions import require_scope
 from app.services.audit_service import AuditService
 from app.services.backboard_project_state_service import BackboardProjectStateService
 from app.services.backboard_stage_service import BackboardStageService
 from app.services.lead_scoring_service import score_enriched_leads
 from app.services.memory_service import upsert_project_memory
+from app.services.connector_service import get_github_access_token
 from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/projects/{project_id}/research", tags=["research"])
@@ -939,8 +939,7 @@ def run_research(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail={"code": "MISSING_SCOPE", "message": "repo:read scope is required for GitHub repo context."},
             )
-        connector = Auth0GithubConnector()
-        token = connector.github_access_token(current_user.sub)
+        token = get_github_access_token(db, current_user.sub)
         if not token:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -962,8 +961,7 @@ def run_research(
             "If context is missing for a requested file, state that limitation explicitly."
         )
     elif project.repo_url and "repo:read" in current_user.scopes:
-        connector = Auth0GithubConnector()
-        token = connector.github_access_token(current_user.sub)
+        token = get_github_access_token(db, current_user.sub)
         parsed = _parse_owner_repo_from_value(project.repo_url)
         if token and parsed:
             owner, repo_name = parsed
@@ -988,8 +986,7 @@ def run_research(
             github_repo_context = {"included": False, "reason": "invalid_project_repo_url"}
 
     if "repo:read" in current_user.scopes and "github_repo" not in context:
-        connector = Auth0GithubConnector()
-        token = connector.github_access_token(current_user.sub)
+        token = get_github_access_token(db, current_user.sub)
         if token:
             try:
                 repos = GitHubClient().list_user_repos(token, per_page=20)
@@ -999,7 +996,7 @@ def run_research(
                 }
                 context["github"] = {
                     "repos": repos,
-                    "note": "GitHub repositories linked through Auth0 identity.",
+                    "note": "GitHub repositories linked for this user.",
                 }
             except Exception as exc:  # noqa: BLE001
                 github_repo_context = {"included": False, "reason": f"github_fetch_failed:{exc}"}
@@ -1147,7 +1144,7 @@ def run_research(
     if output.get("chat_message"):
         db.add(
             AgentChatMessage(
-                project_id=str(project_id),
+                project_id=project_id,
                 agent_type="research",
                 role="assistant",
                 content=str(output.get("chat_message") or ""),

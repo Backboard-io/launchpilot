@@ -4,13 +4,14 @@ from fastapi.responses import JSONResponse
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.routers import approvals, chat, connectors, execution, health, me, positioning, projects, research
+from app.routers import admin, approvals, chat, connectors, execution, health, leaderboard, me, positioning, projects, research
+from app.routers.connectors import oauth_router
 
 configure_logging()
 settings = get_settings()
 
-if settings.auth_mode == "auth0" and (not settings.auth0_issuer or not settings.auth0_audience):
-    raise RuntimeError("AUTH_MODE=auth0 requires AUTH0_ISSUER and AUTH0_AUDIENCE.")
+if settings.auth_mode == "oauth" and not settings.auth_jwt_secret:
+    raise RuntimeError("AUTH_MODE=oauth requires AUTH_JWT_SECRET.")
 if not settings.backboard_api_key:
     raise RuntimeError("BACKBOARD_API_KEY is required for the finalized agent pipeline.")
 
@@ -48,3 +49,6 @@ app.include_router(execution.router, prefix="/v1")
 app.include_router(approvals.router, prefix="/v1")
 app.include_router(chat.router, prefix="/v1")
 app.include_router(connectors.router, prefix="/v1")
+app.include_router(oauth_router)
+app.include_router(leaderboard.router, prefix="/v1")
+app.include_router(admin.router, prefix="/v1")

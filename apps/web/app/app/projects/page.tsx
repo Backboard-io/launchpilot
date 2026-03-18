@@ -1,8 +1,17 @@
+export const dynamic = 'force-dynamic';
+
 import Link from "next/link";
 
 import { ProjectCard } from "@/components/project/project-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { serverApiFetch } from "@/lib/api";
+
+const TASK_CATEGORY_POINTS: Record<string, number> = {
+  infra: 0,
+  coding: 0,
+  text_social: 1,
+  video_social: 3
+};
 
 interface Project {
   id: string;
@@ -15,9 +24,37 @@ interface Project {
   status: string;
 }
 
+interface ExecutionTask {
+  status?: string;
+  evidence_verified_at?: string | null;
+  category?: string | null;
+}
+
+interface ExecutionState {
+  tasks?: ExecutionTask[];
+}
+
 export default async function ProjectsDashboardPage() {
   const projects = (await serverApiFetch<Project[]>("/projects")) ?? [];
   const firstProject = projects[0];
+
+  const executionStates = await Promise.all(
+    projects.map((p) => serverApiFetch<ExecutionState>(`/projects/${p.id}/execution/state`))
+  );
+  const verifiedCount = executionStates.reduce((sum, state) => {
+    const verified =
+      state?.tasks?.filter(
+        (t) => (t.status === "completed" || t.status === "succeeded") && t.evidence_verified_at
+      ) ?? [];
+    return sum + verified.length;
+  }, 0);
+  const verifiedPoints = executionStates.reduce((sum, state) => {
+    const verified =
+      state?.tasks?.filter(
+        (t) => (t.status === "completed" || t.status === "succeeded") && t.evidence_verified_at
+      ) ?? [];
+    return sum + verified.reduce((s, t) => s + (TASK_CATEGORY_POINTS[t.category ?? ""] ?? 0), 0);
+  }, 0);
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -39,7 +76,7 @@ export default async function ProjectsDashboardPage() {
         </Link>
       </header>
 
-      <div className="grid gap-4 md:grid-cols-3 stagger">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 stagger">
         <StatCard
           label="Active Projects"
           value={projects.filter((p) => p.status === "active").length}
@@ -74,6 +111,15 @@ export default async function ProjectsDashboardPage() {
           icon={
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          }
+        />
+        <StatCard
+          label="Verified tasks"
+          value={verifiedPoints > 0 ? `${verifiedCount} · ${verifiedPoints} pts` : verifiedCount}
+          icon={
+            <svg className="h-5 w-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
         />
@@ -117,7 +163,7 @@ export default async function ProjectsDashboardPage() {
                 <h3 className="text-sm font-semibold text-fg-primary">Resume execution</h3>
                 <p className="mt-2 text-sm text-fg-muted">Jump into assets, outreach, and approvals instantly.</p>
                 <Link
-                  href={`/app/projects/${firstProject.slug}/execution`}
+                  href={`/app/projects/${firstProject.slug}/execution/plan`}
                   className="mt-4 inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent-subtle px-3 py-1.5 text-sm font-medium text-accent transition-colors hover:bg-accent/20"
                 >
                   Open Execution

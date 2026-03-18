@@ -28,6 +28,7 @@ interface AgentChatProps {
   modes?: { value: string; label: string }[];
   agentOptions?: AgentOption[];
   quickActions?: { label: string; message: string }[];
+  onCollapse?: () => void;
 }
 
 export function AgentChat({
@@ -45,7 +46,8 @@ export function AgentChat({
     { value: "extend", label: "Expand" }
   ],
   agentOptions = [],
-  quickActions = []
+  quickActions = [],
+  onCollapse
 }: AgentChatProps) {
   const [mode, setMode] = useState(modes[0]?.value ?? "baseline");
   const [selectedAgent, setSelectedAgent] = useState(agentOptions[0]?.value ?? "default");
@@ -146,6 +148,19 @@ export function AgentChat({
                 </option>
               ))}
             </select>
+            {onCollapse && (
+              <button
+                type="button"
+                onClick={onCollapse}
+                className="rounded-lg border border-edge-subtle bg-surface-elevated p-1.5 text-fg-muted transition-colors hover:border-edge-muted hover:bg-surface-overlay hover:text-fg-primary"
+                title="Collapse chat"
+                aria-label="Collapse chat"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
       </div>
